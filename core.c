@@ -9,7 +9,7 @@ int main()
 	for ( i=0; i<10; i++)
 	{
 		printf(" count %d", i);
-		if ( (j++) == 5) printf("JJ\n");
+		if ( (j++) == 5) printf(" jj is eq 5\n");
 	}
 	printf("count end\n");
 	return 0;
