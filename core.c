@@ -2,14 +2,17 @@
 
 int main()
 {
-	int i,j;
+	int i,jj;
 	printf("usb log core \n");
-	printf("start count");
-	j = 0;
+	printf("start count \n");
+	jj = 0;
 	for ( i=0; i<10; i++)
 	{
-		printf(" count equald %d", i);
-		if ( (j++) == 5) printf(" jj is eq 5\n");
+		printf(" count rqqqqwerewrwe %d \n", i);
+		if ( (jj++) == 5) {
+		   printf("JJ\n");
+		   jj = 123;
+		} 	
 	}
 	printf("count end\n");
 	return 0;
