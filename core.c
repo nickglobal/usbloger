@@ -17,6 +17,7 @@ int main()
 	}
 	printf("remote branch added fix 1  \n");	
 	printf("remote branch added fix 2  \n");
+	printf("commit to remote branch \n");
 	printf("count end\n");
 	return 0;
 }
