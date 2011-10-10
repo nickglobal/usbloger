@@ -15,9 +15,12 @@ int main()
 		   jj = 123;
 		} 	
 	}
-	printf("remote branch added fix 1  \n");	
-	printf("remote branch added fix 2  \n");
-	printf("commit once again \n");
-	printf("count end\n");
+	if ( jj == 123 ) 
+	{
+		printf("remote branch added fix 1  \n");	
+		printf("remote branch added fix 2  \n");
+		printf("commit once again \n");
+		printf("count end\n");
+	}
 	return 0;
 }
