@@ -25,5 +25,8 @@ int main()
 		printf("commit once again \n");
 		printf("count end\n");
 	}
+#ifdef USB_FEATURE
+	printf("USB logger [ON]\n");
+#endif
 	return 0;
 }
