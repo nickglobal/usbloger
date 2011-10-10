@@ -15,6 +15,7 @@ int main()
 		   jj = 123;
 		} 	
 	}
+	printf("remote branch added \n");
 	printf("count end\n");
 	return 0;
 }
