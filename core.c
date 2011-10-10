@@ -2,6 +2,7 @@
 
 int main()
 {
+	// comment added
 	int i,jj;
 	printf("usb log core \n");
 	printf("start count \n");
