@@ -17,17 +17,22 @@
 #define BEGIN (0xBE)
 #define END (0xED)
 
-typedef  struct UsbLog_ {
-    char begin;
+typedef  struct  UsbLog_ {
     char time[STR_LEN];
     char host[STR_LEN];
     char serial[STR_LEN];
     char vendorId[STR_LEN];
     char productId[STR_LEN];
     char action[STR_LEN];
-    char end;
-}UsbLog;
+}__attribute__((packed)) UsbLog;
 
+void safe_get_udev_str(char* const dest,const char* src)
+{
+    if(NULL != src)
+    {
+        strncpy(dest, src, STR_LEN);
+    }
+}
 
 void write_buff(struct udev_device* dev)
 {
@@ -39,21 +44,16 @@ void write_buff(struct udev_device* dev)
 
     pFile = fopen ("UsbLog.txt","a+");
 
-    log.begin = 0xBE;
-    log.end = 0xED;
-
     t = time(0);
     strcpy(log.time, ctime( &t ));
     str_len = strlen(log.time);
     log.time[str_len-1] = '\0';//flush \n in the time format
     gethostname( log.host, STR_LEN);
 
-    strcpy(log.serial, udev_device_get_sysattr_value(dev, "serial"));
-    strcpy(log.vendorId, udev_device_get_sysattr_value(dev, "idVendor"));
-    strcpy(log.productId, udev_device_get_sysattr_value(dev, "idProduct"));
-    strcpy(log.action, udev_device_get_action(dev));
-
-
+    safe_get_udev_str(log.serial, udev_device_get_sysattr_value(dev, "serial"));
+    safe_get_udev_str(log.vendorId, udev_device_get_sysattr_value(dev, "idVendor"));
+    safe_get_udev_str(log.productId, udev_device_get_sysattr_value(dev, "idProduct"));
+    safe_get_udev_str(log.action, udev_device_get_action(dev));
 
     if (pFile!=NULL)
     {
@@ -72,21 +72,20 @@ void write_buff(struct udev_device* dev)
       fclose (pFile);
     }
 
-//    printf("\nGot Device\n");
-//    printf("   Time: %s\n", time_b);
-//    printf("   Host: %s\n", hostname_b);
-//    printf("   Action: %s\n\n", udev_device_get_action(dev));
-//
-//    printf("  VendorID: %s\n",
-//            udev_device_get_sysattr_value(dev,"idVendor"));
-//    printf("  ProductID: %s\n",
-//            udev_device_get_sysattr_value(dev, "idProduct"));
-//    printf("  serial: %s\n",
-//             udev_device_get_sysattr_value(dev, "serial"));
-//    printf("  devtype : %s\n",
-//            udev_device_get_devtype(dev) );
-//    printf("  sysname: %s\n",
-//            udev_device_get_sysname(dev) );
+    printf("\n");
+    printf("Action: %s\n",
+            udev_device_get_action(dev));
+    printf("  Device Node Path: %s\n", udev_device_get_devnode(dev));
+    printf("  VendorID: %s\n",
+            udev_device_get_sysattr_value(dev,"idVendor"));
+    printf("  ProductID: %s\n",
+            udev_device_get_sysattr_value(dev, "idProduct"));
+    printf("  serial: %s\n",
+             udev_device_get_sysattr_value(dev, "serial"));
+    printf("  devtype : %s\n",
+            udev_device_get_devtype(dev));
+    printf("  sysname: %s\n",
+            udev_device_get_sysname(dev));
 }
 
 int main (void)
@@ -141,16 +140,7 @@ int main (void)
 //               "disk");
 //        if (dev_mmc)
 //        {
-//            printf("Device Node Path: %s\n", udev_device_get_devnode(dev_mmc));
-//
-//            printf("  VendorID: %s\n",
-//                    udev_device_get_sysattr_value(dev_mmc,"idVendor"));
-//            printf("  ProductID: %s\n",
-//                    udev_device_get_sysattr_value(dev_mmc, "idProduct"));
-//            printf("  serial: %s\n",
-//                     udev_device_get_sysattr_value(dev_mmc, "serial"));
-//
-//            printf("dev_usb %d\n", dev_mmc);
+
 //        }
 
         dev_usb = udev_device_get_parent_with_subsystem_devtype(
@@ -159,18 +149,11 @@ int main (void)
                "usb_device");
         if (dev_usb)
         {
-            write_buff(dev_usb);
-
-//            if ( strcmp(devnode, udev_device_get_devnode(dev_usb)) != 0 )
-//            {
-//            strcpy(devnode, udev_device_get_devnode(dev_usb));
-//            printf("  VendorID: %s\n",
-//                    udev_device_get_sysattr_value(dev_usb,"idVendor"));
-//            printf("  ProductID: %s\n",
-//                    udev_device_get_sysattr_value(dev_usb, "idProduct"));
-//            printf("  serial: %s\n",
-//                     udev_device_get_sysattr_value(dev_usb, "serial"));
-//            }
+            if ( strcmp(devnode, udev_device_get_devnode(dev_usb)) != 0 )
+            {
+              write_buff(dev_usb);
+              strcpy(devnode, udev_device_get_devnode(dev_usb));
+            }
         }
 
         udev_device_unref(dev);
@@ -202,35 +185,11 @@ int main (void)
             if (dev)
             {
                 write_buff(dev);
-//                t = time(0);
-//                strcpy(time_b, ctime( &t ));
-//                str_len = strlen(time_b);
-//                time_b[str_len-1] = '\0';
-//                gethostname( hostname_b, STR_LEN);
-//
-//                printf("\nGot Device\n");
-//                printf("   Time: %s\n", time_b);
-//                printf("   Host: %s\n", hostname_b);
-//                printf("   Action: %s\n\n", udev_device_get_action(dev));
-//
-//                printf("  VendorID: %s\n",
-//                        udev_device_get_sysattr_value(dev,"idVendor"));
-//                printf("  ProductID: %s\n",
-//                        udev_device_get_sysattr_value(dev, "idProduct"));
-//                printf("  serial: %s\n",
-//                         udev_device_get_sysattr_value(dev, "serial"));
-//                printf("  devtype : %s\n",
-//                        udev_device_get_devtype(dev) );
-//                printf("  sysname: %s\n",
-//                        udev_device_get_sysname(dev) );
-
-
-
                 udev_device_unref(dev);
             }
-            else {
-                printf("No Device from receive_device(). An error occured.\n");
-            }
+//            else {
+//                printf("No Device from receive_device(). An error occured.\n");
+//            }
         }
         usleep(250*1000);
         printf(".");

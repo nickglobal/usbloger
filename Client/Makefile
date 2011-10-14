@@ -22,7 +22,7 @@ compile: ClientUSBLogger.c
 link: ClientUSBLogger.o
 	gcc -Wall -ludev ClientUSBLogger.o -o cUSBLog
 	
-clean_all: clean all
+build: clean all
 
 all: compile link
 	@echo "---   Compile Complete   ---"
