@@ -1,0 +1,9 @@
+Thu Oct 13 18:47:16 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:47:25 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:47:31 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:47:38 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:47:43 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:54:38 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:54:45 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:54:59 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
+Thu Oct 13 18:55:06 2011 	aries-l.synapse.com	AA04013000000981	05dc	a731
