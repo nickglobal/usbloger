@@ -1,0 +1,565 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>Chapter 20. Dynamic Kernel Device Management with udev</title><link rel="stylesheet" href="susebooks.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.75.2"><link rel="home" href="index.html" title="Documentation"><link rel="up" href="part.reference.system.html" title="Part IV. System"><link rel="prev" href="cha.suse.html" title="Chapter 19. Special System Features"><link rel="next" href="cha.new.bash.html" title="Chapter 21. Shell Basics"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header" border="0" class="bctable"><tr><td width="80%"><div class="breadcrumbs"><p><a href="index.html"> Documentation</a><span class="breadcrumbs-sep"> &gt; </span><a href="book.opensuse.reference.html">Reference</a><span class="breadcrumbs-sep"> &gt; </span><a href="part.reference.system.html">System</a><span class="breadcrumbs-sep"> &gt; </span><strong><a accesskey="p" title="Chapter 19. Special System Features" href="cha.suse.html"><span>&#9664;</span></a>  <a accesskey="n" title="Chapter 21. Shell Basics" href="cha.new.bash.html"><span>&#9654;</span></a></strong></p></div></td></tr></table></div><div class="chapter" title="Chapter 20. Dynamic Kernel Device Management with udev"><div class="titlepage"><div><div><h2 class="title"><a name="cha.udev"></a>Chapter 20. Dynamic Kernel Device Management with <code class="systemitem">udev</code><span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#cha.udev">¶</a></span></h2></div></div></div><div class="toc"><p><b>Contents</b></p><dl><dt><span class="sect1"><a href="cha.udev.html#sec.udev.devdir">20.1. The <code class="filename">/dev</code> Directory</a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.kernel">20.2. Kernel <code class="systemitem">uevents</code> and <code class="systemitem">udev</code></a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.drivers">20.3. Drivers, Kernel Modules and Devices</a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.boot">20.4. Booting and Initial Device Setup</a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.debug">20.5. Monitoring the Running <code class="systemitem">udev</code> Daemon</a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.rules">20.6. Influencing Kernel Device Event Handling with <code class="systemitem">udev</code> Rules</a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.persdev">20.7. Persistent Device Naming</a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.files">20.8. Files used by <code class="systemitem">udev</code></a></span></dt><dt><span class="sect1"><a href="cha.udev.html#sec.udev.moreinfo">20.9. For More Information</a></span></dt></dl></div><p>
+  The kernel can add or remove almost any device in a running system.
+  Changes in the device state (whether a device is plugged in or removed)
+  need to be propagated to userspace. Devices need to be configured as soon
+  as they are plugged in and recognized. Users of a certain device need to
+  be informed about any changes in this device's recognized state.
+  <code class="systemitem">udev</code> provides the needed
+  infrastructure to dynamically maintain the device node files and symbolic
+  links in the <code class="filename">/dev</code> directory.
+  <code class="systemitem">udev</code> rules provide a way to plug
+  external tools into the kernel device event processing. This enables you
+  to customize <code class="systemitem">udev</code> device handling
+  by, for example, adding certain scripts to execute as part of kernel
+  device handling, or request and import additional data to evaluate during
+  device handling.
+ </p><div class="sect1" title="20.1. The /dev Directory"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.devdir"></a>20.1. The <code class="filename">/dev</code> Directory<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.devdir">¶</a></span></h2></div></div></div><p>
+   The device nodes in the <code class="filename">/dev</code> directory provide
+   access to the corresponding kernel devices. With
+   <code class="systemitem">udev</code>, the
+   <code class="filename">/dev</code> directory reflects the current state of the
+   kernel. Every kernel device has one corresponding device file. If a
+   device is disconnected from the system, the device node is removed.
+  </p><p>
+   The content of the <code class="filename">/dev</code> directory is kept on a
+   temporary file system and all files are rendered at every system
+   start-up. Manually created or modified files do not, by design, survive a
+   reboot. Static files and directories that should always be present in the
+   <code class="filename">/dev</code> directory regardless of the state of the
+   corresponding kernel device can be placed in the
+   <code class="filename">/lib/udev/devices</code> directory. At system start-up, the
+   contents of that directory is copied to the <code class="filename">/dev</code>
+   directory with the same ownership and permissions as the files in
+   <code class="filename">/lib/udev/devices</code>.
+  </p></div><div class="sect1" title="20.2. Kernel uevents and udev"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.kernel"></a>20.2. Kernel <code class="systemitem">uevents</code> and <code class="systemitem">udev</code><span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.kernel">¶</a></span></h2></div></div></div><p>
+   The required device information is exported by the
+   <code class="systemitem">sysfs</code> file system. For every
+   device the kernel has detected and initialized, a directory with the
+   device name is created. It contains attribute files with device-specific
+   properties.
+  </p><p>
+   Every time a device is added or removed, the kernel sends a uevent to
+   notify <code class="systemitem">udev</code> of the change. The
+   <code class="systemitem">udev</code> daemon reads and parses all
+   provided rules from the <code class="filename">/etc/udev/rules.d/*.rules</code>
+   files once at start-up and keeps them in memory. If rules files are
+   changed, added or removed, the daemon can reload the in-memory
+   representation of all rules with the command <span class="command"><strong>udevadm control
+   reload_rules</strong></span>. This is also done when running
+   <span class="command"><strong>/etc/init.d/boot.udev reload</strong></span>. For more details on
+   <code class="systemitem">udev</code> rules and their syntax,
+   refer to <a class="xref" href="cha.udev.html#sec.udev.rules" title="20.6. Influencing Kernel Device Event Handling with udev Rules">Section 20.6, &#8220;Influencing Kernel Device Event Handling with <code class="systemitem">udev</code> Rules&#8221;</a>.
+  </p><p>
+   Every received event is matched against the set of provides rules. The
+   rules can add or change event environment keys, request a specific name
+   for the device node to create, add symlinks pointing to the node or add
+   programs to run after the device node is created. The driver core
+   <code class="systemitem">uevents</code> are received from a
+   kernel netlink socket.
+  </p></div><div class="sect1" title="20.3. Drivers, Kernel Modules and Devices"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.drivers"></a>20.3. Drivers, Kernel Modules and Devices<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.drivers">¶</a></span></h2></div></div></div><p>
+   The kernel bus drivers probe for devices. For every detected device, the
+   kernel creates an internal device structure while the driver core sends a
+   uevent to the <code class="systemitem">udev</code> daemon. Bus
+   devices identify themselves by a specially-formatted ID, which tells what
+   kind of device it is. Usually these IDs consist of vendor and product ID
+   and other subsystem-specific values. Every bus has its own scheme for
+   these IDs, called <code class="envar">MODALIAS</code>. The kernel takes the device
+   information, composes a <code class="envar">MODALIAS</code> ID string from it and
+   sends that string along with the event. For a USB mouse, it looks like
+   this:
+  </p><pre class="screen">MODALIAS=usb:v046DpC03Ed2000dc00dsc00dp00ic03isc01ip02</pre><p>
+   Every device driver carries a list of known aliases for devices it can
+   handle. The list is contained in the kernel module file itself. The
+   program depmod reads the ID lists and creates the file
+   <code class="filename">modules.alias</code> in the kernel's
+   <code class="filename">/lib/modules</code> directory for all currently available
+   modules. With this infrastructure, module loading is as easy as calling
+   <span class="command"><strong>modprobe</strong></span> for every event that carries a
+   <code class="literal">MODALIAS</code> key. If <span class="command"><strong>modprobe $MODALIAS</strong></span>
+   is called, it matches the device alias composed for the device with the
+   aliases provided by the modules. If a matching entry is found, that
+   module is loaded. All this is automatically triggered by
+   <code class="systemitem">udev</code>.
+  </p></div><div class="sect1" title="20.4. Booting and Initial Device Setup"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.boot"></a>20.4. Booting and Initial Device Setup<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.boot">¶</a></span></h2></div></div></div><p>
+   All device events happening during the boot process before the
+   <code class="systemitem">udev</code> daemon is running are lost,
+   because the infrastructure to handle these events resides on the root
+   file system and is not available at that time. To cover that loss, the
+   kernel provides a <code class="filename">uevent</code> file located in the device
+   directory of every device in the
+   <code class="systemitem">sysfs</code> file system. By writing
+   <code class="literal">add</code> to that file, the kernel resends the same event as
+   the one lost during boot. A simple loop over all
+   <code class="filename">uevent</code> files in <code class="filename">/sys</code> triggers
+   all events again to create the device nodes and perform device setup.
+  </p><p>
+   As an example, a USB mouse present during boot may not be initialized by
+   the early boot logic, because the driver is not available at that time.
+   The event for the device discovery was lost and failed to find a kernel
+   module for the device. Instead of manually searching for possibly
+   connected devices, <code class="systemitem">udev</code> just
+   requests all device events from the kernel after the root file system is
+   available, so the event for the USB mouse device just runs again. Now it
+   finds the kernel module on the mounted root file system and the USB mouse
+   can be initialized.
+  </p><p>
+   From userspace, there is no visible difference between a device coldplug
+   sequence and a device discovery during runtime. In both cases, the same
+   rules are used to match and the same configured programs are run.
+  </p></div><div class="sect1" title="20.5. Monitoring the Running udev Daemon"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.debug"></a>20.5. Monitoring the Running <code class="systemitem">udev</code> Daemon<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.debug">¶</a></span></h2></div></div></div><p>
+   The program <span class="command"><strong>udevadm monitor</strong></span> can be used to visualize
+   the driver core events and the timing of the
+   <code class="systemitem">udev</code> event processes.
+  </p><pre class="screen">UEVENT[1185238505.276660] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1 (usb)
+UDEV  [1185238505.279198] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1 (usb)
+UEVENT[1185238505.279527] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0 (usb)
+UDEV  [1185238505.285573] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0 (usb)
+UEVENT[1185238505.298878] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0/input/input10 (input)
+UDEV  [1185238505.305026] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0/input/input10 (input)
+UEVENT[1185238505.305442] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0/input/input10/mouse2 (input)
+UEVENT[1185238505.306440] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0/input/input10/event4 (input)
+UDEV  [1185238505.325384] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0/input/input10/event4 (input)
+UDEV  [1185238505.342257] add   /devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0/input/input10/mouse2 (input)</pre><p>
+   The <code class="literal">UEVENT</code> lines show the events the kernel has sent
+   over netlink. The <code class="literal">UDEV</code> lines show the finished
+   <code class="systemitem">udev</code> event handlers. The timing
+   is printed in microseconds. The time between <code class="literal">UEVENT</code>
+   and <code class="literal">UDEV</code> is the time
+   <code class="systemitem">udev</code> took to process this event
+   or the <code class="systemitem">udev</code> daemon has delayed
+   its execution to synchronize this event with related and already running
+   events. For example, events for hard disk partitions always wait for the
+   main disk device event to finish, because the partition events may rely
+   on the data that the main disk event has queried from the hardware.
+  </p><p>
+   <span class="command"><strong>udevadm monitor --env</strong></span> shows the complete event
+   environment:
+  </p><pre class="screen">ACTION=add
+DEVPATH=/devices/pci0000:00/0000:00:1d.2/usb3/3-1/3-1:1.0/input/input10
+SUBSYSTEM=input
+SEQNUM=1181
+NAME="Logitech USB-PS/2 Optical Mouse"
+PHYS="usb-0000:00:1d.2-1/input0"
+UNIQ=""
+EV=7
+KEY=70000 0 0 0 0
+REL=103
+MODALIAS=input:b0003v046DpC03Ee0110-e0,1,2,k110,111,112,r0,1,8,amlsfw</pre><p>
+   <code class="systemitem">udev</code> also sends messages to
+   syslog. The default syslog priority that controls which messages are sent
+   to syslog is specified in the
+   <code class="systemitem">udev</code> configuration file
+   <code class="filename">/etc/udev/udev.conf</code>. The log priority of the running
+   daemon can be changed with <span class="command"><strong>udevadm control
+   log_priority=<em class="replaceable"><code>level/number</code></em></strong></span>.
+  </p></div><div class="sect1" title="20.6. Influencing Kernel Device Event Handling with udev Rules"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.rules"></a>20.6. Influencing Kernel Device Event Handling with <code class="systemitem">udev</code> Rules<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.rules">¶</a></span></h2></div></div></div><p>
+   A <code class="systemitem">udev</code> rule can match any
+   property the kernel adds to the event itself or any information that the
+   kernel exports to <code class="filename">sysfs</code>. The rule can also request
+   additional information from external programs. Every event is matched
+   against all provided rules. All rules are located in the
+   <code class="filename">/etc/udev/rules.d</code> directory.
+  </p><p>
+   Every line in the rules file contains at least one key value pair. There
+   are two kinds of keys, match and assignment keys. If all match keys match
+   their values, the rule is applied and the assignment keys are assigned
+   the specified value. A matching rule may specify the name of the device
+   node, add symlinks pointing to the node or run a specified program as
+   part of the event handling. If no matching rule is found, the default
+   device node name is used to create the device node. Detailed information
+   about the rule syntax and the provided keys to match or import data are
+   described in the <code class="systemitem">udev</code> man page.
+   The following example rules provide a basic introduction to
+   <code class="systemitem">udev</code> rule syntax. The example
+   rules are all taken from the
+   <code class="systemitem">udev</code> default rule set that is
+   located under
+   <code class="filename">/etc/udev/rules.d/50-udev-default.rules</code>.
+  </p><div class="example"><a name="ex.rules"></a><p class="title"><b>Example 20.1. Example <code class="systemitem">udev</code> Rules</b><span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#ex.rules">¶</a></span></p><div class="example-contents"><pre class="screen"># console
+KERNEL=="console", MODE="0600", OPTIONS="last_rule"
+
+# serial devices
+KERNEL=="ttyUSB*", ATTRS{product}=="[Pp]alm*Handheld*", SYMLINK+="pilot"
+
+# printer
+SUBSYSTEM=="usb", KERNEL=="lp*", NAME="usb/%k", SYMLINK+="usb%k", GROUP="lp"
+
+# kernel firmware loader
+SUBSYSTEM=="firmware", ACTION=="add", RUN+="firmware.sh"</pre></div></div><br class="example-break"><p>
+   The <code class="systemitem">console</code> rule consists of three keys: one
+   match key (<code class="literal">KERNEL</code>) and two assign keys
+   (<code class="literal">MODE</code>, <code class="literal">OPTIONS</code>). The
+   <code class="literal">KERNEL</code> match rule searches the device list for any
+   items of the type <code class="literal">console</code>. Only exact matches are
+   valid and trigger this rule to be executed. The <code class="literal">MODE</code>
+   key assigns special permissions to the device node, in this case, read
+   and write permissions to the owner of this device only. The
+   <code class="literal">OPTIONS</code> key makes this rule the last rule to be
+   applied to any device of this type. Any later rule matching this
+   particular device type does not have any effect.
+  </p><p>
+   The <code class="systemitem">serial devices</code> rule is not available in
+   <code class="filename">50-udev-default.rules</code> anymore, but it is still worth
+   considering. It consists of two match keys (<code class="literal">KERNEL</code> and
+   <code class="literal">ATTRS</code>) and one assign key
+   (<code class="literal">SYMLINK</code>). The <code class="literal">KERNEL</code> key searches
+   for all devices of the <code class="literal">ttyUSB</code> type. Using the
+   <code class="literal">*</code> wild card, this key matches several of these
+   devices. The second match key, <code class="literal">ATTRS</code>, checks whether
+   the <code class="filename">product</code> attribute file in
+   <code class="literal">sysfs</code> for any <code class="literal">ttyUSB</code> device
+   contains a certain string. The assign key (<code class="literal">SYMLINK</code>)
+   triggers the addition of a symbolic link to this device under
+   <code class="filename">/dev/pilot</code>. The operator used in this key
+   (<code class="literal">+=</code>) tells
+   <code class="systemitem">udev</code> to additionally perform
+   this action, even if previous or later rules add other symbolic links. As
+   this rule contains two match keys, it is only applied if both conditions
+   are met.
+  </p><p>
+   The <code class="systemitem">printer</code> rule deals with USB printers and
+   contains two match keys which must both apply to get the entire rule
+   applied (<code class="literal">SUBSYSTEM</code> and <code class="literal">KERNEL</code>).
+   Three assign keys deal with the naming for this device type
+   (<code class="literal">NAME</code>), the creation of symbolic device links
+   (<code class="literal">SYMLINK</code>) and the group membership for this device
+   type (<code class="literal">GROUP</code>). Using the <code class="literal">*</code> wild card
+   in the <code class="literal">KERNEL</code> key makes it match several
+   <code class="literal">lp</code> printer devices. Substitutions are used in both,
+   the <code class="literal">NAME</code> and the <code class="literal">SYMLINK</code> keys to
+   extend these strings by the internal device name. For example, the
+   symlink to the first <code class="literal">lp</code> USB printer would read
+   <code class="filename">/dev/usblp0</code>.
+  </p><p>
+   The <code class="systemitem">kernel firmware loader</code> rule makes
+   <code class="systemitem">udev</code> load additional firmware by
+   an external helper script during runtime. The
+   <code class="literal">SUBSYSTEM</code> match key searches for the
+   <code class="literal">firmware</code> subsystem. The <code class="literal">ACTION</code> key
+   checks whether any device belonging to the <code class="literal">firmware</code>
+   subsystem has been added. The <code class="literal">RUN+=</code> key triggers the
+   execution of the <code class="literal">firmware.sh</code> script to locate the
+   firmware that is to be loaded.
+  </p><p>
+   Some general characteristics are common to all rules:
+  </p><div class="itemizedlist"><ul class="itemizedlist" type="bullet"><li class="listitem" style="list-style-type: disc"><p>
+     Each rule consists of one or more key value pairs separated by a comma.
+    </p></li><li class="listitem" style="list-style-type: disc"><p>
+     A key's operation is determined by the operator.
+     <code class="systemitem">udev</code> rules support several
+     different operators.
+    </p></li><li class="listitem" style="list-style-type: disc"><p>
+     Each given value must be enclosed by quotation marks.
+    </p></li><li class="listitem" style="list-style-type: disc"><p>
+     Each line of the rules file represents one rule. If a rule is longer
+     than just one line, use <code class="literal">\</code> to join the different
+     lines just as you would do in shell syntax.
+    </p></li><li class="listitem" style="list-style-type: disc"><p>
+     <code class="systemitem">udev</code> rules support a
+     shell-style pattern that matches the <code class="literal">*</code>,
+     <code class="literal">?</code>, and <code class="literal">[]</code> patterns.
+    </p></li><li class="listitem" style="list-style-type: disc"><p>
+     <code class="systemitem">udev</code> rules support
+     substitutions.
+    </p></li></ul></div><div class="sect2" title="20.6.1. Using Operators in udev Rules"><div class="titlepage"><div><div><h3 class="title"><a name="sec.udev.rules.ops"></a>20.6.1. Using Operators in <code class="systemitem">udev</code> Rules<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.rules.ops">¶</a></span></h3></div></div></div><p>
+    Creating keys you can choose from several different operators, depending
+    on the type of key you want to create. Match keys will normally just be
+    used to find a value that either matches or explicitly mismatches the
+    search value. Match keys contain either of the following operators:
+   </p><div class="variablelist"><dl><dt><span class="term"><code class="literal">==</code>
+     </span></dt><dd><p>
+       Compare for equality. If the key contains a search pattern, all
+       results matching this pattern are valid.
+      </p></dd><dt><span class="term"><code class="literal">!=</code>
+     </span></dt><dd><p>
+       Compare for non-equality. If the key contains a search pattern, all
+       results matching this pattern are valid.
+      </p></dd></dl></div><p>
+    Any of the following operators can be used with assign keys:
+   </p><div class="variablelist"><dl><dt><span class="term"><code class="literal">=</code>
+     </span></dt><dd><p>
+       Assign a value to a key. If the key previously consisted of a list of
+       values, the key resets and only the single value is assigned.
+      </p></dd><dt><span class="term"><code class="literal">+=</code>
+     </span></dt><dd><p>
+       Add a value to a key that contains a list of entries.
+      </p></dd><dt><span class="term"><code class="literal">:=</code>
+     </span></dt><dd><p>
+       Assign a final value. Disallow any later change by later rules.
+      </p></dd></dl></div></div><div class="sect2" title="20.6.2. Using Substitutions in udev Rules"><div class="titlepage"><div><div><h3 class="title"><a name="sec.udev.rules.subst"></a>20.6.2. Using Substitutions in <code class="systemitem">udev</code> Rules<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.rules.subst">¶</a></span></h3></div></div></div><p>
+    <code class="systemitem">udev</code> rules support the use of
+    placeholders and substitutions. Use them in a similar fashion as you
+    would do in any other scripts. The following substitutions can be used
+    with <code class="systemitem">udev</code> rules:
+   </p><div class="variablelist"><dl><dt><span class="term"><code class="literal">%r</code>, <code class="literal">$root</code>
+     </span></dt><dd><p>
+       The device directory, <code class="filename">/dev</code> by default.
+      </p></dd><dt><span class="term"><code class="literal">%p</code>, <code class="literal">$devpath</code>
+     </span></dt><dd><p>
+       The value of <code class="envar">DEVPATH</code>.
+      </p></dd><dt><span class="term"><code class="literal">%k</code>, <code class="literal">$kernel</code>
+     </span></dt><dd><p>
+       The value of <code class="envar">KERNEL</code> or the internal device name.
+      </p></dd><dt><span class="term"><code class="literal">%n</code>, <code class="literal">$number</code>
+     </span></dt><dd><p>
+       The device number.
+      </p></dd><dt><span class="term"><code class="literal">%N</code>, <code class="literal">$tempnode</code>
+     </span></dt><dd><p>
+       The temporary name of the device file.
+      </p></dd><dt><span class="term"><code class="literal">%M</code>, <code class="literal">$major</code>
+     </span></dt><dd><p>
+       The major number of the device.
+      </p></dd><dt><span class="term"><code class="literal">%m</code>, <code class="literal">$minor</code>
+     </span></dt><dd><p>
+       The minor number of the device.
+      </p></dd><dt><span class="term"><code class="literal">%s{<em class="replaceable"><code>attribute</code></em>}</code>,
+     <code class="literal">$attr{<em class="replaceable"><code>attribute</code></em>}</code>
+     </span></dt><dd><p>
+       The value of a <code class="filename">sysfs</code> attribute (specified by
+       <em class="replaceable"><code>attribute</code></em>).
+      </p></dd><dt><span class="term"><code class="literal">%E{<em class="replaceable"><code>variable</code></em>}</code>,
+     <code class="literal">$attr{<em class="replaceable"><code>variable</code></em>}</code>
+     </span></dt><dd><p>
+       The value of an environment variable (specified by
+       <em class="replaceable"><code>variable</code></em>).
+      </p></dd><dt><span class="term"><code class="literal">%c</code>, <code class="literal">$result</code>
+     </span></dt><dd><p>
+       The output of <code class="envar">PROGRAM</code>.
+      </p></dd><dt><span class="term"><code class="literal">%%</code>
+     </span></dt><dd><p>
+       The <code class="literal">%</code> character.
+      </p></dd><dt><span class="term"><code class="literal">$$</code>
+     </span></dt><dd><p>
+       The <code class="literal">$</code> character.
+      </p></dd></dl></div></div><div class="sect2" title="20.6.3. Using udev Match Keys"><div class="titlepage"><div><div><h3 class="title"><a name="sec.udev.rules.match"></a>20.6.3. Using <code class="systemitem">udev</code> Match Keys<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.rules.match">¶</a></span></h3></div></div></div><p>
+    Match keys describe conditions that must be met before a
+    <code class="systemitem">udev</code> rule can be applied. The
+    following match keys are available:
+   </p><div class="variablelist"><dl><dt><span class="term"><code class="literal">ACTION</code>
+     </span></dt><dd><p>
+       The name of the event action, for example, <code class="literal">add</code> or
+       <code class="literal">remove</code> when adding or removing a device.
+      </p></dd><dt><span class="term"><code class="literal">DEVPATH</code>
+     </span></dt><dd><p>
+       The device path of the event device, for example,
+       <code class="literal">DEVPATH=/bus/pci/drivers/ipw3945</code> to search for all
+       events related to the ipw3945 driver.
+      </p></dd><dt><span class="term"><code class="literal">KERNEL</code>
+     </span></dt><dd><p>
+       The internal (kernel) name of the event device.
+      </p></dd><dt><span class="term"><code class="literal">SUBSYSTEM</code>
+     </span></dt><dd><p>
+       The subsystem of the event device, for example,
+       <code class="literal">SUBSYSTEM=usb</code> for all events related to USB
+       devices.
+      </p></dd><dt><span class="term"><code class="literal">ATTR{<em class="replaceable"><code>filename</code></em>}</code>
+     </span></dt><dd><p>
+       <code class="systemitem">sysfs</code> attributes of the
+       event device. To match a string contained in the
+       <code class="filename">vendor</code> attribute file name, you could use
+       <code class="literal">ATTR{vendor}=="On[sS]tream"</code>, for example.
+      </p></dd><dt><span class="term"><code class="literal">KERNELS</code>
+     </span></dt><dd><p>
+       Let <code class="systemitem">udev</code> search the device
+       path upwards for a matching device name.
+      </p></dd><dt><span class="term"><code class="literal">SUBSYSTEMS</code>
+     </span></dt><dd><p>
+       Let <code class="systemitem">udev</code> search the device
+       path upwards for a matching device subsystem name.
+      </p></dd><dt><span class="term"><code class="literal">DRIVERS</code>
+     </span></dt><dd><p>
+       Let <code class="systemitem">udev</code> search the device
+       path upwards for a matching device driver name.
+      </p></dd><dt><span class="term"><code class="literal">ATTRS{<em class="replaceable"><code>filename</code></em>}</code>
+     </span></dt><dd><p>
+       Let <code class="systemitem">udev</code> search the device
+       path upwards for a device with matching
+       <code class="systemitem">sysfs</code> attribute values.
+      </p></dd><dt><span class="term"><code class="literal">ENV{<em class="replaceable"><code>key</code></em>}</code>
+     </span></dt><dd><p>
+       The value of an environment variable, for example,
+       <code class="literal">ENV{ID_BUS}="ieee1394</code> to search for all events
+       related to the FireWire bus ID.
+      </p></dd><dt><span class="term"><code class="literal">PROGRAM</code>
+     </span></dt><dd><p>
+       Let <code class="systemitem">udev</code> execute an external
+       program. To be successful, the program must return with exit code
+       zero. The program's output, printed to stdout, is available to the
+       <code class="literal">RESULT</code> key.
+      </p></dd><dt><span class="term"><code class="literal">RESULT</code>
+     </span></dt><dd><p>
+       Match the output string of the last <code class="literal">PROGRAM</code> call.
+       Either include this key in the same rule as the
+       <code class="literal">PROGRAM</code> key or in a later one.
+      </p></dd></dl></div></div><div class="sect2" title="20.6.4. Using udev Assign Keys"><div class="titlepage"><div><div><h3 class="title"><a name="sec.udev.rules.assign"></a>20.6.4. Using <code class="systemitem">udev</code> Assign Keys<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.rules.assign">¶</a></span></h3></div></div></div><p>
+    In contrast to the match keys described above, assign keys do not
+    describe conditions that must be met. They assign values, names and
+    actions to the device nodes maintained by
+    <code class="systemitem">udev</code>.
+   </p><div class="variablelist"><dl><dt><span class="term"><code class="literal">NAME</code>
+     </span></dt><dd><p>
+       The name of the device node to be created. Once a rule has set a node
+       name, all other rules with a <code class="literal">NAME</code> key for this
+       node are ignored.
+      </p></dd><dt><span class="term"><code class="literal">SYMLINK</code>
+     </span></dt><dd><p>
+       The name of a symlink related to the node to be created. Multiple
+       matching rules can add symlinks to be created with the device node.
+       You can also specify multiple symlinks for one node in one rule using
+       the space character to separate the symlink names.
+      </p></dd><dt><span class="term"><code class="literal">OWNER, GROUP, MODE</code>
+     </span></dt><dd><p>
+       The permissions for the new device node. Values specified here
+       overwrite anything that has been compiled in.
+      </p></dd><dt><span class="term"><code class="literal">ATTR{<em class="replaceable"><code>key</code></em>}</code>
+     </span></dt><dd><p>
+       Specify a value to be written to a
+       <code class="systemitem">sysfs</code> attribute of the
+       event device. If the <code class="literal">==</code> operator is used, this key
+       is also used to match against the value of a
+       <code class="systemitem">sysfs</code> attribute.
+      </p></dd><dt><span class="term"><code class="literal">ENV{<em class="replaceable"><code>key</code></em>}</code>
+     </span></dt><dd><p>
+       Tell <code class="systemitem">udev</code> to export a
+       variable to the environment. If the <code class="literal">==</code> operator is
+       used, this key is also used to match against an environment variable.
+      </p></dd><dt><span class="term"><code class="literal">RUN</code>
+     </span></dt><dd><p>
+       Tell <code class="systemitem">udev</code> to add a program
+       to the list of programs to be executed for this device. Keep in mind
+       to restrict this to very short tasks to avoid blocking further events
+       for this device.
+      </p></dd><dt><span class="term"><code class="literal">LABEL</code>
+     </span></dt><dd><p>
+       Add a label where a <code class="literal">GOTO</code> can jump to.
+      </p></dd><dt><span class="term"><code class="literal">GOTO</code>
+     </span></dt><dd><p>
+       Tell <code class="systemitem">udev</code> to skip a number
+       of rules and continue with the one that carries the label referenced
+       by the <code class="literal">GOTO</code> key.
+      </p></dd><dt><span class="term"><code class="literal">IMPORT{<em class="replaceable"><code>type</code></em>}</code>
+     </span></dt><dd><p>
+       Load variables into the event environment such as the output of an
+       external program. <code class="systemitem">udev</code>
+       imports variables of several different types. If no type is
+       specified, <code class="systemitem">udev</code> tries to
+       determine the type itself based on the executable bit of the file
+       permissions.
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="bullet"><li class="listitem" style="list-style-type: disc"><p>
+         <code class="literal">program</code> tells
+         <code class="systemitem">udev</code> to execute an
+         external program and import its output.
+        </p></li><li class="listitem" style="list-style-type: disc"><p>
+         <code class="literal">file</code> tells
+         <code class="systemitem">udev</code> to import a text
+         file.
+        </p></li><li class="listitem" style="list-style-type: disc"><p>
+         <code class="literal">parent</code> tells
+         <code class="systemitem">udev</code> to import the stored
+         keys from the parent device.
+        </p></li></ul></div></dd><dt><span class="term"><code class="literal">WAIT_FOR_SYSFS</code>
+     </span></dt><dd><p>
+       Tells <code class="systemitem">udev</code> to wait for the
+       specified <code class="systemitem">sysfs</code> file to
+       be created for a certain device. For example,
+       <code class="literal">WAIT_FOR_SYSFS="ioerr_cnt"</code> informs
+       <code class="systemitem">udev</code> to wait until the
+       <code class="filename">ioerr_cnt</code> file has been created.
+      </p></dd><dt><span class="term"><code class="literal">OPTIONS</code>
+     </span></dt><dd><p>
+       The <code class="literal">OPTION</code> key may have several possible values:
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="bullet"><li class="listitem" style="list-style-type: disc"><p>
+         <code class="literal">last_rule</code> tells
+         <code class="systemitem">udev</code> to ignore all later
+         rules.
+        </p></li><li class="listitem" style="list-style-type: disc"><p>
+         <code class="literal">ignore_device</code> tells
+         <code class="systemitem">udev</code> to ignore this event
+         completely.
+        </p></li><li class="listitem" style="list-style-type: disc"><p>
+         <code class="literal">ignore_remove</code> tells
+         <code class="systemitem">udev</code> to ignore all later
+         remove events for the device.
+        </p></li><li class="listitem" style="list-style-type: disc"><p>
+         <code class="literal">all_partitions</code> tells
+         <code class="systemitem">udev</code> to create device
+         nodes for all available partitions on a block device.
+        </p></li></ul></div></dd></dl></div></div></div><div class="sect1" title="20.7. Persistent Device Naming"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.persdev"></a>20.7. Persistent Device Naming<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.persdev">¶</a></span></h2></div></div></div><p>
+   The dynamic device directory and the
+   <code class="systemitem">udev</code> rules infrastructure make
+   it possible to provide stable names for all disk devices&#8212;regardless
+   of their order of recognition or the connection used for the device.
+   Every appropriate block device the kernel creates is examined by tools
+   with special knowledge about certain buses, drive types or file systems.
+   Along with the dynamic kernel-provided device node name,
+   <code class="systemitem">udev</code> maintains classes of
+   persistent symbolic links pointing to the device:
+  </p><pre class="screen">/dev/disk
+|-- by-id
+|   |-- scsi-SATA_HTS726060M9AT00_MRH453M4HWHG7B -&gt; ../../sda
+|   |-- scsi-SATA_HTS726060M9AT00_MRH453M4HWHG7B-part1 -&gt; ../../sda1
+|   |-- scsi-SATA_HTS726060M9AT00_MRH453M4HWHG7B-part6 -&gt; ../../sda6
+|   |-- scsi-SATA_HTS726060M9AT00_MRH453M4HWHG7B-part7 -&gt; ../../sda7
+|   |-- usb-Generic_STORAGE_DEVICE_02773 -&gt; ../../sdd
+|   `-- usb-Generic_STORAGE_DEVICE_02773-part1 -&gt; ../../sdd1
+|-- by-label
+|   |-- Photos -&gt; ../../sdd1
+|   |-- SUSE10 -&gt; ../../sda7
+|   `-- devel -&gt; ../../sda6
+|-- by-path
+|   |-- pci-0000:00:1f.2-scsi-0:0:0:0 -&gt; ../../sda
+|   |-- pci-0000:00:1f.2-scsi-0:0:0:0-part1 -&gt; ../../sda1
+|   |-- pci-0000:00:1f.2-scsi-0:0:0:0-part6 -&gt; ../../sda6
+|   |-- pci-0000:00:1f.2-scsi-0:0:0:0-part7 -&gt; ../../sda7
+|   |-- pci-0000:00:1f.2-scsi-1:0:0:0 -&gt; ../../sr0
+|   |-- usb-02773:0:0:2 -&gt; ../../sdd
+|   |-- usb-02773:0:0:2-part1 -&gt; ../../sdd1
+`-- by-uuid
+    |-- 159a47a4-e6e6-40be-a757-a629991479ae -&gt; ../../sda7
+    |-- 3e999973-00c9-4917-9442-b7633bd95b9e -&gt; ../../sda6
+    `-- 4210-8F8C -&gt; ../../sdd1</pre></div><div class="sect1" title="20.8. Files used by udev"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.files"></a>20.8. Files used by <code class="systemitem">udev</code><span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.files">¶</a></span></h2></div></div></div><div class="variablelist"><dl><dt><span class="term"><code class="filename">/sys/*</code>
+    </span></dt><dd><p>
+      Virtual file system provided by the Linux kernel, exporting all
+      currently known devices. This information is used by
+      <code class="systemitem">udev</code> to create device nodes
+      in <code class="filename">/dev</code>
+     </p></dd></dl></div><div class="variablelist"><dl><dt><span class="term"><code class="filename">/dev/*</code>
+    </span></dt><dd><p>
+      Dynamically created device nodes and static content copied at boot
+      time from <code class="filename">/lib/udev/devices/*</code>
+     </p></dd></dl></div><p>
+   The following files and directories contain the crucial elements of the
+   <code class="systemitem">udev</code> infrastructure:
+  </p><div class="variablelist"><dl><dt><span class="term"><code class="filename">/etc/udev/udev.conf</code>
+    </span></dt><dd><p>
+      Main <code class="systemitem">udev</code> configuration file.
+     </p></dd><dt><span class="term"><code class="filename">/etc/udev/rules.d/*</code>
+    </span></dt><dd><p>
+      <code class="systemitem">udev</code> event matching rules.
+     </p></dd><dt><span class="term"><code class="filename">/lib/udev/devices/*</code>
+    </span></dt><dd><p>
+      Static <code class="filename">/dev</code> content.
+     </p></dd><dt><span class="term"><code class="filename">/lib/udev/*</code>
+    </span></dt><dd><p>
+      Helper programs called from
+      <code class="systemitem">udev</code> rules.
+     </p></dd></dl></div></div><div class="sect1" title="20.9. For More Information"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="sec.udev.moreinfo"></a>20.9. For More Information<span class="permalink"><a alt="Permalink" title="Copy Permalink" href="#sec.udev.moreinfo">¶</a></span></h2></div></div></div><p>
+   For more information about the
+   <code class="systemitem">udev</code> infrastructure, refer to
+   the following man pages:
+  </p><div class="variablelist"><dl><dt><span class="term"><code class="systemitem">udev</code>
+    </span></dt><dd><p>
+      General information about
+      <code class="systemitem">udev</code>, keys, rules and other
+      important configuration issues.
+     </p></dd><dt><span class="term"><span class="command"><strong>udevadm</strong></span>
+    </span></dt><dd><p>
+      <span class="command"><strong>udevadm</strong></span> can be used to control the runtime behavior
+      of <code class="systemitem">udev</code>, request kernel
+      events, manage the event queue and provide simple debugging
+      mechanisms.
+     </p></dd><dt><span class="term"><code class="systemitem">udevd</code>
+    </span></dt><dd><p>
+      Information about the <code class="systemitem">udev</code>
+      event managing daemon.
+     </p></dd></dl></div></div></div><div class="navfooter"><table width="100%" summary="Navigation footer" border="0" class="bctable"><tr><td width="80%"><div class="breadcrumbs"><p><a href="index.html"> Documentation</a><span class="breadcrumbs-sep"> &gt; </span><a href="book.opensuse.reference.html">Reference</a><span class="breadcrumbs-sep"> &gt; </span><a href="part.reference.system.html">System</a><span class="breadcrumbs-sep"> &gt; </span><strong><a accesskey="p" title="Chapter 19. Special System Features" href="cha.suse.html"><span>&#9664;</span></a>  <a accesskey="n" title="Chapter 21. Shell Basics" href="cha.new.bash.html"><span>&#9654;</span></a></strong></p></div></td></tr></table></div></body></html>

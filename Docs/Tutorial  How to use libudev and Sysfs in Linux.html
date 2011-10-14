@@ -1,0 +1,571 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                      "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+<head>
+  <title>Tutorial: How to use libudev and Sysfs in Linux</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="keywords" content="libudev, Sysfs, tutorial, documentation, instructions, guide, enumeration, monitoring, example">
+  <meta name="Description" content="A tutorial introduction to using libudev for access of Sysfs information about devices in Linux. Device enumeration and monitoring for hotplug events are covered, with examples.">
+  <link href="screen.css" media="screen" rel="stylesheet"  type="text/css">
+</head>
+
+<body>
+<center><h1>libudev and Sysfs Tutorial</h1></center>
+
+<h3>Introduction and Motivation</h3>
+
+<p>
+On Unix and Unix-like systems, hardware devices are accessed through
+special files (also called device files or nodes) located in the
+<code>/dev</code> directory. These files are read from and written to just
+like normal files, but instead of writing and reading data on a disk, they
+communicate directly with a kernel driver which then communicates with the
+hardware. There are many online resources describing <code>/dev</code> files in
+more detail. Traditonally, these special files were created at install time
+by the distribution, using the <code>mknod</code> command. In recent years,
+Linux systems began using <code>udev</code> to manage these
+<code>/dev</code> files at runtime. For example, <code>udev</code> will
+create nodes when devices are detected and delete them when devices are removed
+(including hotplug devices at runtime). This way,
+the <code>/dev</code> directory contains (for the most part) only entries
+for devices which actually exist on the system at the current time, as
+opposed to devices which <i>could</i> exist.
+</p>
+
+<p> Udev also has a powerful scripting interface (with files commonly located
+in <code>/etc/udev/rules.d</code>) which distributors (and end users) often
+use to customize the way device nodes are created. Customizable properties include file permissions,
+location within
+the filesystem, and symbolic links. As could be imagined, this customization
+can make it difficult for application writers to locate specific device
+files (or
+types of devices), because they could be easily moved by modifying the
+<code>udev</code>
+rules. For example, in recent years, the <code>js</code> (joystick) nodes
+were moved from <code>/dev</code> to <code>/dev/input</code>. Many older
+programs explicitly opened devices in <code>/dev</code> (for example
+<code>/dev/js0</code>). When these older programs are run today, and
+try to open <code>/dev/js0</code>, they will simply not work
+since <code>/dev/js0</code> has been moved.
+</p>
+
+<p>
+Another problem is that when using multiple devices of the same type, the
+order in which they appear in <code>/dev</code> is not guaranteed to be the
+same every time. This often happens with USB devices. Some USB devices will
+show up in a different order after a reboot even when plugged into the same
+USB ports. I've
+observed this directly with FTDI USB serial ports. For example, with two of
+these ports plugged in, udev will create <code>/dev/ttyUSB0</code> and
+<code>/dev/ttyUSB1</code>, but the order is undefined. (This particular
+problem can be worked around by creating <code>udev</code> rules which create
+symlinks based on something like a device serial number).
+</p>
+
+<p>
+Another issue is that when dealing with things like HID devices, simply knowing
+that an entry such as <code>/dev/hidraw0</code> exists tells you nothing about
+what kind of device it is. It could be any type of HID device.
+</p>
+
+<h3>The Solution - sysfs</h3>
+
+<p>
+Sysfs is a virtual filesystem exported by the kernel, similar to
+<code>/proc</code>. The files in Sysfs contain information about devices and
+drivers. Some files in Sysfs are even writable, for configuration and
+control of devices attached to the system. Sysfs is always mounted on <code>/sys</code>.
+</p>
+
+<p>
+The directories in Sysfs contain the heirarchy of devices, as they are
+attached to the computer. For example, on my computer, the
+<code>hidraw0</code> device is located under:
+</p><blockquote>
+<code>/sys/devices/pci0000:00/0000:00:12.2/usb1/1-5/1-5.4/1-5.4:1.0/0003:04D8:003F.0001/hidraw/hidraw0</code>
+</blockquote>
+<p>Based on the path, the device is attached to (roughly, starting from
+the end) configuration 1 <code>(:1.0)</code> of the device attached to port
+number 4 of device 1-5, connected to USB controller 1 (usb1), connected to
+the PCI bus. While interesting, this directory path doesn't do us very much
+good, since it's dependent on how the hardware is physically connected to
+the computer.
+</p>
+
+<p>
+Fortunately, Sysfs also provides a large number of symlinks, for easy access
+to devices
+without having to know which PCI and USB ports they are connected to. In
+<code>/sys/class</code> there is a directory for each different class of
+device. My <code>/sys/class</code> directory looks like this:
+</p>
+<blockquote><pre><code>
+alan@ato:/sys/class$ ls
+<font color="blue">
+atm        graphics       ieee1394_protocol  printer       thermal
+backlight  hidraw         input              rfkill        tty
+bdi        hwmon          mem                scsi_device   usb
+block      i2c-adapter    misc               scsi_disk     vc
+bluetooth  ide_port       net                scsi_generic  video_output
+dma        ieee1394       pci_bus            scsi_host     vtconsole
+dmi        ieee1394_host  power_supply       sound
+firmware   ieee1394_node  ppdev              spi_master
+</font></code></pre></blockquote>
+<p>
+Following our example of using <code>hidraw</code>, one can see that there is a
+<code>hidraw</code> directory here. Inside it is a symbolic link named
+<code>hidraw0</code> which points to
+</p>
+<blockquote><code>
+ ../../devices/pci0000:00/0000:00:12.2/usb1/1-5/1-5.4/1-5.4:1.0/0003:04D8:003F.0001/hidraw/hidraw0
+</code></blockquote>
+<p>
+This way, hidraw devices can easily be found under <code>/sys/class/hidraw
+</code> without knowing anything about their USB or PCI heirarchy. It would be
+a good exercise to examine the contents of the <code>/sys</code> directory,
+especially <code>/sys/bus</code>, <code>/sys/class</code>, and
+<code>/sys/subsystem</code>. Since much of <code>/sys</code> is symbolic
+links, it may also benefit you to use the utility <code>realpath</code> to show
+physical directory paths, as opposed to symbolic link paths. This is useful when
+trying to find the actual parent directories of device directories. For
+example, to find the containing USB device entry for <code>hidraw0</code>,
+one could use <code>realpath</code> to do something like the following:
+</p>
+<blockquote><pre><code>
+alan@ato:/sys$ <b>cd /sys/class/hidraw/hidraw0/</b>
+alan@ato:/sys/class/hidraw/hidraw0$ <b>ls</b>
+<font color="blue">dev</font>  <font color="lightblue">device</font> <font color="blue">power</font>  <font color="lightblue">subsystem</font>  uevent
+alan@ato:/sys/class/hidraw/hidraw0$ <b>cd `realpath $PWD`</b>
+alan@ato:/sys/devices/pci0000:00/0000:00:12.2/usb2/2-5/2-5.4/2-5.4:1.0/0003:04D8:003F.0001/hidraw/hidraw0$ <b>ls</b>
+<font color="blue">dev</font>  <font color="lightblue">device</font> <font color="blue">power</font>  <font color="lightblue">subsystem</font>  uevent
+alan@ato:/sys/devices/pci0000:00/0000:00:12.2/usb2/2-5/2-5.4/2-5.4:1.0/0003:04D8:003F.0001/hidraw/hidraw0$ <b>cd ../../../../</b>
+alan@ato:/sys/devices/pci0000:00/0000:00:12.2/usb2/2-5/2-5.4$ <b>ls</b>
+<font color="blue">2-5.4:1.0</font>            bDeviceSubClass     configuration  idProduct     remove
+authorized           bmAttributes        descriptors    idVendor      serial
+avoid_reset_quirk    bMaxPacketSize0     dev            manufacturer  speed
+bcdDevice            bMaxPower           devnum         maxchild      <font color="lightblue">subsystem</font>
+bConfigurationValue  bNumConfigurations  devpath        <font color="blue">power</font>         uevent
+bDeviceClass         bNumInterfaces      <font color="lightblue">driver</font>         product       urbnum
+bDeviceProtocol      busnum              <font color="blue">ep_00</font>          quirks
+version
+alan@ato:/sys/devices/pci0000:00/0000:00:12.2/usb2/2-5/2-5.4$ 
+
+</code></pre></blockquote>
+
+<h3>libudev</h3>
+
+<p>
+Because it's cumbersome and error-prone to walk the Sysfs tree from within
+an application's code,
+there's a convenient library called <code>libudev</code> to do this task for
+us. Currently, the closest thing to a manual for <code>libudev</code> is the
+gtk-doc-genereated API reference located here:
+</p>
+<blockquote>
+<a href="http://www.kernel.org/pub/linux/utils/kernel/hotplug/libudev/">http://www.kernel.org/pub/linux/utils/kernel/hotplug/libudev/</a>
+</blockquote>
+<p>The documentation there is not really enough for the average developer to get
+started, so hopefully this guide and its example will make it a bit easier.
+</p>
+
+<p>
+For the remainder of this guide, we'll be using <code>libudev</code> to
+access <code>hidraw</code> devices. Using libudev, we'll be able to inspect
+the devices, including their Vendor ID (VID), Product ID (PID), serial
+number, and device strings, without ever opening the device. Further,
+<code>libudev</code> will tell us exactly where inside <code>/dev</code> the
+device's node is located, giving the  application a robust and
+distribution-independent way of accessing the device.
+</p>
+
+<p>
+Building with libudev is as simple as including <code>libudev.h</code> and
+passing <code>-ludev</code> to the compiler to link with the
+<code>libudev</code> library.
+</p>
+
+<p>
+The first example gets a list of the <code>hidraw</code> objects connected
+to the system, and
+prints out their device node path, manufacturer strings, and serial number.
+To do this, a <code>udev_enumerate</code> object is created, and the text
+string <code>"hidraw"</code> is specified to be used as its filter.
+<code>libudev</code> will then return a list of <code>udev_device</code>
+objects which match the filter. In our example, this will be a list of all
+the <code>hidraw</code> devices attached to the system. The example code performs
+the following tasks:
+</p>
+<ol>
+	<li>Initialize the library, getting handle to a <code>struct udev</code>.</li>
+	<li>Enumerate the devices</li>
+	<li>For each device:
+	
+	<ol>
+		<li>Print its node name (eg: <code>/dev/hidraw0</code>).</li>
+		<li>Find the ancestor node which represents the actual USB
+		    device (as opposed to the device's HID interface).</li>
+		<li>Print the USB device information (IDs, serial number,
+		    etc).</li>
+		<li>Unreference the device object.</li>
+	
+	</ol></li>
+	<li>Unreference the enumeration object.</li>
+	<li>Unreference the udev object.</li>
+	
+</ol>
+
+
+<blockquote><pre><code>
+#<B><FONT COLOR="#5F9EA0">include</FONT></B> <B><FONT COLOR="#BC8F8F">&lt;libudev.h&gt;</FONT></B>
+#<B><FONT COLOR="#5F9EA0">include</FONT></B> <B><FONT COLOR="#BC8F8F">&lt;stdio.h&gt;</FONT></B>
+#<B><FONT COLOR="#5F9EA0">include</FONT></B> <B><FONT COLOR="#BC8F8F">&lt;stdlib.h&gt;</FONT></B>
+#<B><FONT COLOR="#5F9EA0">include</FONT></B> <B><FONT COLOR="#BC8F8F">&lt;locale.h&gt;</FONT></B>
+#<B><FONT COLOR="#5F9EA0">include</FONT></B> <B><FONT COLOR="#BC8F8F">&lt;unistd.h&gt;</FONT></B>
+
+<B><FONT COLOR="#228B22">int</FONT></B> <B><FONT COLOR="#0000FF">main</FONT></B> (<B><FONT COLOR="#228B22">void</FONT></B>)
+{
+	<B><FONT COLOR="#228B22">struct</FONT></B> udev *udev;
+	<B><FONT COLOR="#228B22">struct</FONT></B> udev_enumerate *enumerate;
+	<B><FONT COLOR="#228B22">struct</FONT></B> udev_list_entry *devices, *dev_list_entry;
+	<B><FONT COLOR="#228B22">struct</FONT></B> udev_device *dev;
+	
+	<I><FONT COLOR="#B22222">/* Create the udev object */</FONT></I>
+	udev = <b>udev_new</b>();
+	<B><FONT COLOR="#A020F0">if</FONT></B> (!udev) {
+		printf(<B><FONT COLOR="#BC8F8F">&quot;Can't create udev\n&quot;</FONT></B>);
+		exit(1);
+	}
+	
+	<I><FONT COLOR="#B22222">/* Create a list of the devices in the 'hidraw' subsystem. */</FONT></I>
+	enumerate = <b>udev_enumerate_new</b>(udev);
+	<b>udev_enumerate_add_match_subsystem</b>(enumerate, <B><FONT COLOR="#BC8F8F">&quot;hidraw&quot;</FONT></B>);
+	<b>udev_enumerate_scan_devices</b>(enumerate);
+	devices = <b>udev_enumerate_get_list_entry</b>(enumerate);
+	<I><FONT COLOR="#B22222">/* For each item enumerated, print out its information.
+	   udev_list_entry_foreach is a macro which expands to
+	   a loop. The loop will be executed for each member in
+	   devices, setting dev_list_entry to a list entry
+	   which contains the device's path in /sys. */</FONT></I>
+	<b>udev_list_entry_foreach</b>(dev_list_entry, devices) {
+		<B><FONT COLOR="#228B22">const</FONT></B> <B><FONT COLOR="#228B22">char</FONT></B> *path;
+		
+		<I><FONT COLOR="#B22222">/* Get the filename of the /sys entry for the device
+		   and create a udev_device object (dev) representing it */</FONT></I>
+		path = <b>udev_list_entry_get_name</b>(dev_list_entry);
+		dev = <b>udev_device_new_from_syspath</b>(udev, path);
+
+		<I><FONT COLOR="#B22222">/* usb_device_get_devnode() returns the path to the device node
+		   itself in /dev. */</FONT></I>
+		printf(<B><FONT COLOR="#BC8F8F">&quot;Device Node Path: %s\n&quot;</FONT></B>, udev_device_get_devnode(dev));
+
+		<I><FONT COLOR="#B22222">/* The device pointed to by dev contains information about
+		   the hidraw device. In order to get information about the
+		   USB device, get the parent device with the
+		   subsystem/devtype pair of &quot;usb&quot;/&quot;usb_device&quot;. This will
+		   be several levels up the tree, but the function will find
+		   it.*/</FONT></I>
+		dev = <b>udev_device_get_parent_with_subsystem_devtype</b>(
+		       dev,
+		       <B><FONT COLOR="#BC8F8F">&quot;usb&quot;</FONT></B>,
+		       <B><FONT COLOR="#BC8F8F">&quot;usb_device&quot;</FONT></B>);
+		<B><FONT COLOR="#A020F0">if</FONT></B> (!dev) {
+			printf(<B><FONT COLOR="#BC8F8F">&quot;Unable to find parent usb device.&quot;</FONT></B>);
+			exit(1);
+		}
+	
+		<I><FONT COLOR="#B22222">/* From here, we can call get_sysattr_value() for each file
+		   in the device's /sys entry. The strings passed into these
+		   functions (idProduct, idVendor, serial, etc.) correspond
+		   directly to the files in the directory which represents
+		   the USB device. Note that USB strings are Unicode, UCS2
+		   encoded, but the strings returned from
+		   udev_device_get_sysattr_value() are UTF-8 encoded. */</FONT></I>
+		printf(<B><FONT COLOR="#BC8F8F">&quot;  VID/PID: %s %s\n&quot;</FONT></B>,
+		        <b>udev_device_get_sysattr_value</b>(dev,<B><FONT COLOR="#BC8F8F">&quot;idVendor&quot;</FONT></B>),
+		        <b>udev_device_get_sysattr_value</b>(dev, <B><FONT COLOR="#BC8F8F">&quot;idProduct&quot;</FONT></B>));
+		printf(<B><FONT COLOR="#BC8F8F">&quot;  %s\n  %s\n&quot;</FONT></B>,
+		        <b>udev_device_get_sysattr_value</b>(dev,<B><FONT COLOR="#BC8F8F">&quot;manufacturer&quot;</FONT></B>),
+		        <b>udev_device_get_sysattr_value</b>(dev,<B><FONT COLOR="#BC8F8F">&quot;product&quot;</FONT></B>));
+		printf(<B><FONT COLOR="#BC8F8F">&quot;  serial: %s\n&quot;</FONT></B>,
+		         <b>udev_device_get_sysattr_value</b>(dev, <B><FONT COLOR="#BC8F8F">&quot;serial&quot;</FONT></B>));
+		udev_device_unref(dev);
+	}
+	<I><FONT COLOR="#B22222">/* Free the enumerator object */</FONT></I>
+	<b>udev_enumerate_unref</b>(enumerate);
+
+	<b>udev_unref</b>(udev);
+
+	<B><FONT COLOR="#A020F0">return</FONT></B> 0;       
+}
+
+</code></pre></blockquote>
+
+<p>
+<code>libudev</code> programs can be compiled using the following:
+</p>
+<blockquote><code>
+gcc -Wall -g -o udev_example udev_example.c -ludev
+</code></blockquote>
+
+
+<p>
+On my system, I have a Microchip Application Demo connected, so my output is
+the following (notice how the non-ASCII, Unicode character from the USB serial number is
+propagated through to userspace as UTF-8):
+</p>
+<blockquote><pre><code>
+alan@alan-desktop:~/tmp$ ./test_udev 
+Device Node Path: /dev/hidraw0
+  VID/PID: 04d8 003f
+  Microchip Technology Inc.
+  Simple HID Device Demo
+  serial: 1234Å
+</code></pre></blockquote>
+
+
+<p><b>Some Notes on libudev</b></p>
+
+<p>
+Before moving on, it seems appropriate to mention some important things
+about libudev.
+</p>
+<ul>
+<li><code>libudev</code>'s functions are string-based. Since the data is
+coming directly from sysfs (which contains (virtual) files with text in
+them), all the data which comes from <code>libudev</code> is in text string
+format.
+This means that the user will have to manually convert strings to integer types
+if desired. </li>
+<li>The strings passed to <code>udev_device_get_sysattr_value()</code>
+correspond to file names in the sysfs tree. In this example,
+<code>idVendor</code> corresponds to
+
+<blockquote><code>
+	/sys/devices/pci0000:00/0000:00:12.2/usb1/1-5/1-5.4/idVendor
+</code></blockquote>
+
+which can also be reached as (using the sysfs symlinks)
+
+<blockquote><code>
+	/sys/bus/usb/devices/1-5.4/idVendor
+</code></blockquote>
+In order to find out which properties are available for a device, simply
+find the device in sysfs, and look at which files exist. On my system, my
+<code>/sys/bus/usb/devices/1-5.4/</code> directory looks like the following:
+
+<blockquote><pre><code>
+<font color="blue">1-5.4:1.0</font>            bDeviceSubClass     configuration  idProduct     remove
+authorized           bmAttributes        descriptors    idVendor      serial
+avoid_reset_quirk    bMaxPacketSize0     dev            manufacturer  speed
+bcdDevice            bMaxPower           devnum         maxchild      <font color="lightblue">subsystem</font>
+bConfigurationValue  bNumConfigurations  devpath        <font color="blue">power</font>         uevent
+bDeviceClass         bNumInterfaces      <font color="lightblue">driver</font>         product       urbnum
+bDeviceProtocol      busnum              <font color="blue">ep_00</font>          quirks
+version
+</code></pre></blockquote>
+Any non-directory file or link in that directory can be queried with
+<code>udev_device_get_sysattr_value()</code> to determine the properties of
+the device.
+</li>
+<li>All the strings which come from sysfs are Unicode UTF-8. It is an error
+to assume that they are ASCII.</li>
+<li><code>libudev</code> is reference counted. Instead of specifically
+allocating and freeing objects, ref() and unref() functions (such as
+<code>udev_ref()</code> and <code>udev_unref()</code>) are used for keeping track of how many
+references to an object exist. When the reference count drops to zero, the
+object is freed. Functions which return a new object return it with a
+reference count of 1, so calling its unref() function will effectively free
+it. See the <code>libudev</code> documentation (referenced above). </li>
+</ul>
+
+<h3><code>libudev</code> - Monitoring Interface</h3>
+
+<p>
+<code>libudev</code> also provides a monitoring interface. The monitoring
+interface will report events to the application when the status of a device
+changes. This is useful for receiving notification when devices are connected
+or disconnected from the system. Like the enumeration interface described above,
+the monitoring interface also provides a filtering mechanisn, so that an
+application can subscribe to only events with which it is concerned. For
+example, if an application added <code>"hidraw"</code> to the filter,
+only events concerning <code>hidraw</code> devices would be delivered
+to the application. When a device changes state, the
+<code>udev_monitor_receive_device()</code> function will return a handle to
+a <code>udev_device</code> which represents the object which changed. The returned object
+can then be queried with the <code>udev_device_get_action()</code> function
+to determine which action occurred. The actions are returned as the
+following strings:
+<ul>
+<li><code>add</code> - Device is connected to the system
+<li><code>remove</code> - Device is disconnected from the system
+<li><code>change</code> - Something about the device changed
+<li><code>move</code> - Device node was moved, renamed, or re-parented
+</ul>
+
+<p>
+The <code>udev_monitor_receive_device()</code> function is blocking. That is,
+when called, program execution will stop until there is an event to be
+returned. This use case does not seem to be very useful. Fortunately, the
+<code>udev_monitor</code> object can provide a file descriptor, suitable for
+use with the <code>select()</code> system call. <code>select()</code> can be
+used to determine if a call to <code>udev_monitor_receive_device()</code>
+will block, providing a way to receive events in a non-blocking way.
+</p>
+
+<p>
+The following code shows an example of the <code>libudev</code> monitor
+interface. The example runs a loop which executes <code>select()</code> to
+determine if there has been an event. If there has, it calls
+<code>udev_monitor_receive_device()</code> to receive the event and prints
+it out. At the end of the loop it
+<code>sleep()</code>'s for 250 milliseconds. In real life, a simple program
+like this would be just fine to not use <code>select()</code> and just let
+<code>udev_monitor_receive_device()</code> block, but it is written this way
+to show an example of how to get non-blocking behavior from the
+<code>libudev</code> monitoring interface.
+</p>
+
+<blockquote><pre><code>
+
+	<I><FONT COLOR="#B22222">/* Set up a monitor to monitor hidraw devices */</FONT></I>
+	mon = <b>udev_monitor_new_from_netlink</b>(udev, <B><FONT COLOR="#BC8F8F">&quot;udev&quot;</FONT></B>);
+	<b>udev_monitor_filter_add_match_subsystem_devtype</b>(mon, <B><FONT COLOR="#BC8F8F">&quot;hidraw&quot;</FONT></B>, NULL);
+	<b>udev_monitor_enable_receiving</b>(mon);
+	<I><FONT COLOR="#B22222">/* Get the file descriptor (fd) for the monitor.
+	   This fd will get passed to select() */</FONT></I>
+	fd = <b>udev_monitor_get_fd</b>(mon);
+	
+	<I><FONT COLOR="#B22222">/* This section will run continuously, calling usleep() at
+	   the end of each pass. This is to demonstrate how to use
+	   a udev_monitor in a non-blocking way. */</FONT></I>
+	<B><FONT COLOR="#A020F0">while</FONT></B> (1) {
+		<I><FONT COLOR="#B22222">/* Set up the call to select(). In this case, select() will
+		   only operate on a single file descriptor, the one
+		   associated with our udev_monitor. Note that the timeval
+		   object is set to 0, which will cause select() to not
+		   block. */</FONT></I>
+		fd_set fds;
+		<B><FONT COLOR="#228B22">struct</FONT></B> timeval tv;
+		<B><FONT COLOR="#228B22">int</FONT></B> ret;
+		
+		FD_ZERO(&amp;fds);
+		FD_SET(fd, &amp;fds);
+		tv.tv_sec = 0;
+		tv.tv_usec = 0;
+		
+		ret = <b>select</b>(fd+1, &amp;fds, NULL, NULL, &amp;tv);
+		
+		<I><FONT COLOR="#B22222">/* Check if our file descriptor has received data. */</FONT></I>
+		<B><FONT COLOR="#A020F0">if</FONT></B> (ret &gt; 0 &amp;&amp; FD_ISSET(fd, &amp;fds)) {
+			printf(<B><FONT COLOR="#BC8F8F">&quot;\nselect() says there should be data\n&quot;</FONT></B>);
+			
+			<I><FONT COLOR="#B22222">/* Make the call to receive the device.
+			   select() ensured that this will not block. */</FONT></I>
+			dev = <b>udev_monitor_receive_device</b>(mon);
+			<B><FONT COLOR="#A020F0">if</FONT></B> (dev) {
+				printf(<B><FONT COLOR="#BC8F8F">&quot;Got Device\n&quot;</FONT></B>);
+				printf(<B><FONT COLOR="#BC8F8F">&quot;   Node: %s\n&quot;</FONT></B>, udev_device_get_devnode(dev));
+				printf(<B><FONT COLOR="#BC8F8F">&quot;   Subsystem: %s\n&quot;</FONT></B>, udev_device_get_subsystem(dev));
+				printf(<B><FONT COLOR="#BC8F8F">&quot;   Devtype: %s\n&quot;</FONT></B>, udev_device_get_devtype(dev));
+
+				printf(<B><FONT COLOR="#BC8F8F">&quot;   Action: %s\n&quot;</FONT></B>,<b>udev_device_get_action</b>(dev));
+				<b>udev_device_unref</b>(dev);
+			}
+			<B><FONT COLOR="#A020F0">else</FONT></B> {
+				printf(<B><FONT COLOR="#BC8F8F">&quot;No Device from receive_device(). An error occured.\n&quot;</FONT></B>);
+			}					
+		}
+		usleep(250*1000);
+		printf(<B><FONT COLOR="#BC8F8F">&quot;.&quot;</FONT></B>);
+		fflush(stdout);
+	}
+</code></pre></blockquote>
+<p>
+It's important to note that when using monitoring and enumeration together,
+that monitoring should be enabled <i>before</i> enumeration. This way, any
+events (for example devices being attached to the system) which happen
+during enumeration will not be lost. If enumeration is done before
+monitoring is enabled, any device attached between the time the enumeration
+happens and when monitoring starts will be missed. The algorithm
+should be:
+</p>
+<ol>
+	<li>Set up monitoring.</li>
+	<li>Enumerate devices (optionally opening desired devices).</li>
+	<li>Begin checking the monitoring interface for events.</li>
+</ol>
+<p>
+The example file (linked at the end of this document) uses enumeration and
+monitoring together, and follows this algorithm.
+The code above shows <i>only</i> monitoring, for simplicity.
+</p>
+
+
+
+<p><b>Output</b></p>
+
+<p>
+The code above will run forever. (Terminate it with <code>Ctrl-C</code>). With
+the above section of code running, the following data is printed out as I
+disconnect and reconnect my HID device (note that a . character is printed
+every 250 milliseconds):
+</p>
+<blockquote><pre><code>
+...........................
+select() says there should be data
+Got Device
+   Node: /dev/hidraw0
+   Subsystem: hidraw
+   Devtype: (null)
+   Action: <b>remove</b>
+.............
+select() says there should be data
+Got Device
+   Node: /dev/hidraw0
+   Subsystem: hidraw
+   Devtype: (null)
+   Action: <b>add</b>
+......^C
+</code></pre></blockquote>
+
+
+<h3>Conclusion</h3>
+
+<p>
+The libudev interface is very useful for creating robust software which
+needs to access a specific hardware device or monitor the real-time connection and
+disconnection status of hot-pluggable hardware. I hope you find this document
+useful. The full source code of the demo is available through the following
+link:
+</p>
+<blockquote>
+<a href="udev_example.c">udev_example.c</a>
+</blockquote>
+
+<hr>
+<pre>Alan Ott
+<a href="mailto:alan@signal11.us">alan@signal11.us</a>
+<a href="http://www.signal11.us">Signal 11 Software</a>
+2010-05-23</pre>
+
+
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-3585429-4']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript';
+ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' :
+'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0];
+s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+
+</body>
+</html>
