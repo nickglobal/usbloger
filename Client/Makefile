@@ -16,11 +16,11 @@ LDLAGS += -Wall
 LDLAGS += -g
 LDFLAGS += -ludev
 
-compile: ClientUSBLogger.c
-	gcc -c -g -Wall ClientUSBLogger.c
+compile: ClientUSBLogger.c SocketUDP.c ListDev.c
+	gcc -c -g -Wall ClientUSBLogger.c SocketUDP.c ListDev.c
 	
 link: ClientUSBLogger.o
-	gcc -Wall -ludev ClientUSBLogger.o -o cUSBLog
+	gcc -Wall -ludev ClientUSBLogger.o SocketUDP.o ListDev.o -o client
 	
 build: clean all
 

@@ -1,0 +1,84 @@
+/* $Id$ */
+
+#openid-ext-block-form {
+  text-align: center;
+}
+
+#openid-ext-block-form #edit-input,
+#openid-ext-block-form #edit-provider {
+  width: 80%;
+}
+
+#openid-ext-block-form #edit-input,
+#openid-ext-block-form #edit-provider option {
+  padding-left: 18px;
+  background-repeat: no-repeat;
+  background-position: left center;
+}
+
+#openid-ext-block-form .openid-ext-info {
+  font-size: x-small;
+}
+
+/* accordion theme */
+#openid-ext-block-form ul li {
+  text-align: left;
+  border: 1px solid #999;
+  -moz-border-radius: 3px;
+  -webkit-border-radius: 3px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: none;
+}
+
+#openid-ext-block-form ul li .accordion-header {
+  display: inline;
+  font-size: medium;
+  font-weight: bold;
+}
+
+#openid-ext-block-form ul li .accordion-header a {
+  padding-left: 18px;
+  background-repeat: no-repeat;
+  background-position: left center;
+  text-decoration: none;
+}
+
+#openid-ext-block-form .accordion-content {
+  display: none;
+  text-align: center;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+#openid-ext-block-form .accordion-content {
+  display: none;
+  text-align: center;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+#openid-ext-block-form .accordion-content #edit-input {
+  padding-left: 0px;
+}
+
+/* admin area */
+#openid_providers td.region {
+  font-weight: bold;
+}
+
+#openid_providers tr.region-message {
+  font-weight: normal;
+  color: #999;
+}
+
+#openid_providers tr.region-populated {
+  display: none;
+}
+
+.openid_provider-region {
+  background-color: #ff6;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding: 3px;
+}

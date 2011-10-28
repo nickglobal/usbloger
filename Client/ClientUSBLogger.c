@@ -4,7 +4,10 @@
  *  Created on: Oct 12, 2011
  *      Author: Igor.Medvyedyev
  */
-
+#include "common.h"
+#include "ClientUSBLogger.h"
+#include "ListDev.h"
+#include "SocketUDP.h"
 #include <libudev.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,80 +15,137 @@
 #include <locale.h>
 #include <unistd.h>
 #include <time.h>
+#include </usr/include/asm-generic/errno-base.h>
 
-#define STR_LEN (255)
-#define BEGIN (0xBE)
-#define END (0xED)
 
-typedef  struct  UsbLog_ {
-    char time[STR_LEN];
-    char host[STR_LEN];
-    char serial[STR_LEN];
-    char vendorId[STR_LEN];
-    char productId[STR_LEN];
-    char action[STR_LEN];
-}__attribute__((packed)) UsbLog;
-
-void safe_get_udev_str(char* const dest,const char* src)
+int safe_get_udev_str(char* const dest,const char* src)
 {
+    int status = EINVAL;
+
     if(NULL != src)
     {
-        strncpy(dest, src, STR_LEN);
+        status = 0;
+        strncpy(dest, src, LEN_STR);
     }
+    else
+    {
+        *dest = 0;
+    }
+
+    return status;
 }
 
-void write_buff(struct udev_device* dev)
+void add_field2buff(char *buff, char *str, int *len)
 {
-    UsbLog log;
+    *buff = strlen(str);
+    *len += *buff + 2;
+    strcpy(buff+1, str);
+    //DPRINT("Field Len: %d\n",*buff);
+    //DPRINT("Field Str: %s\n",buff+1);
+
+}
+
+void write_log(struct udev_device *dev)
+{
+    char curTime[LEN_STR] = {0};
+    char curHost[LEN_STR] = {0};
+    DevUsb devUsb;
+    DevList *devList;
     time_t t;
-    int str_len;
-    char rawBuf[1024];
+    int strLen;
+    char rawBuf[LEN_BUF];
+    int lenBuf;
+    const char inserted_str[]={"inserted"};
     FILE * pFile;
 
-    pFile = fopen ("UsbLog.txt","a+");
+    pFile = fopen ("ClientReport.txt","a+");
 
     t = time(0);
-    strcpy(log.time, ctime( &t ));
-    str_len = strlen(log.time);
-    log.time[str_len-1] = '\0';//flush \n in the time format
-    gethostname( log.host, STR_LEN);
+    strncpy(curTime, ctime( &t ), LEN_STR);
+    strLen = strlen(curTime);
+    curTime[strLen-1] = 0;//flush \n in the time format
+    gethostname( curHost, LEN_STR);
 
-    safe_get_udev_str(log.serial, udev_device_get_sysattr_value(dev, "serial"));
-    safe_get_udev_str(log.vendorId, udev_device_get_sysattr_value(dev, "idVendor"));
-    safe_get_udev_str(log.productId, udev_device_get_sysattr_value(dev, "idProduct"));
-    safe_get_udev_str(log.action, udev_device_get_action(dev));
+    safe_get_udev_str(devUsb.devnode, udev_device_get_devnode(dev));
+    safe_get_udev_str(devUsb.serial, udev_device_get_sysattr_value(dev, "serial"));
+    safe_get_udev_str(devUsb.vendorId, udev_device_get_sysattr_value(dev, "idVendor"));
+    safe_get_udev_str(devUsb.productId, udev_device_get_sysattr_value(dev, "idProduct"));
+
+    if ( EINVAL == safe_get_udev_str(devUsb.action, udev_device_get_action(dev)) )
+    {
+        safe_get_udev_str(devUsb.action, inserted_str);
+    }
+
+    if ( 0 == strcmp(devUsb.action, "add") ||  0 == strcmp(devUsb.action, "inserted") )
+    {
+        add_dev(&devUsb);
+    }
+    else if ( 0 == strcmp(devUsb.action, "remove") )
+    {
+        devList = find_dev(&devUsb);
+        if(NULL != devList)
+        {
+            strcpy(devUsb.serial, devList->serial);
+            strcpy(devUsb.vendorId, devList->vendorId);
+            strcpy(devUsb.productId, devList->productId);
+            remove_dev(&devUsb);
+        }
+
+    }
+
+    DPRINT("\n");
+    DPRINT("Time: %s\n", curTime);
+    DPRINT("Host: %s\n", curHost);
+    DPRINT("  Action: %s\n",devUsb.action);
+    DPRINT("  Device Node Path: %s\n", devUsb.devnode);
+    DPRINT("  serial: %s\n",devUsb.serial);
+    DPRINT("  VendorID: %s\n",devUsb.vendorId);
+    DPRINT("  ProductID: %s\n",devUsb.productId);
+    DPRINT("  devtype : %s\n",udev_device_get_devtype(dev));
+    DPRINT("  sysname: %s\n",udev_device_get_sysname(dev));
+    DPRINT("  property: %s\n",udev_device_get_property_value(dev, "ID_SERIAL"));
+
+    lenBuf = 0;
+    memset(rawBuf, 0,LEN_BUF);
+    rawBuf[lenBuf++] = MRK_BEGIN;
+    //DPRINT("\n====================\n");
+    //DPRINT("Marker Begin: %x\n",rawBuf[lenBuf-1]);
+    rawBuf[lenBuf++] = FIELD_NUM;
+    //DPRINT("Field Num: %d\n",rawBuf[lenBuf-1]);
+
+    add_field2buff(&rawBuf[lenBuf], curTime, &lenBuf);
+    add_field2buff(&rawBuf[lenBuf], curHost, &lenBuf);
+    add_field2buff(&rawBuf[lenBuf], devUsb.serial, &lenBuf);
+    add_field2buff(&rawBuf[lenBuf], devUsb.vendorId, &lenBuf);
+    add_field2buff(&rawBuf[lenBuf], devUsb.productId, &lenBuf);
+    add_field2buff(&rawBuf[lenBuf], devUsb.action, &lenBuf);
+
+    rawBuf[lenBuf++] = MRK_END;
+    //DPRINT("Marker End: %x\n",rawBuf[lenBuf-1]);
+    //DPRINT("\n====================\n");
+
+    if (0 != send_buffer_to_server(IP_ADDRESS, PORT, rawBuf, lenBuf) )
+    {
+        perror("Send UDP message error!");
+    }
 
     if (pFile!=NULL)
     {
-      fputs (log.time,pFile);
+      fputs (curTime,pFile);
       fputs(" ",pFile);
-      fputs (log.host,pFile);
+      fputs (curHost,pFile);
       fputs(" ",pFile);
-      fputs (log.serial,pFile);
+      fputs (devUsb.serial,pFile);
       fputs(" ",pFile);
-      fputs (log.vendorId,pFile);
+      fputs (devUsb.vendorId,pFile);
       fputs(" ",pFile);
-      fputs (log.productId,pFile);
+      fputs (devUsb.productId,pFile);
       fputs(" ",pFile);
-      fputs (log.action,pFile);
+      fputs (devUsb.action,pFile);
       fputs("\n",pFile);
       fclose (pFile);
     }
 
-    printf("\n");
-    printf("Action: %s\n",
-            udev_device_get_action(dev));
-    printf("  Device Node Path: %s\n", udev_device_get_devnode(dev));
-    printf("  VendorID: %s\n",
-            udev_device_get_sysattr_value(dev,"idVendor"));
-    printf("  ProductID: %s\n",
-            udev_device_get_sysattr_value(dev, "idProduct"));
-    printf("  serial: %s\n",
-             udev_device_get_sysattr_value(dev, "serial"));
-    printf("  devtype : %s\n",
-            udev_device_get_devtype(dev));
-    printf("  sysname: %s\n",
-            udev_device_get_sysname(dev));
 }
 
 int main (void)
@@ -93,7 +153,7 @@ int main (void)
     struct udev *udev;
     struct udev_enumerate *enumerate;
     struct udev_list_entry *devices, *dev_list_entry;
-    struct udev_device *dev, *dev_usb;//, *dev_mmc;
+    struct udev_device *dev, *devUsb;//, *dev_mmc;
 
     struct udev_monitor *mon;
     int fd;
@@ -106,14 +166,15 @@ int main (void)
     udev = udev_new();
     if (!udev)
     {
-        printf("Can't create udev\n");
+        DPRINT("Can't create udev\n");
         exit(1);
     }
 
 
     /* Set up a monitor to monitor disk devices */
     mon = udev_monitor_new_from_netlink(udev, "udev");
-    udev_monitor_filter_add_match_subsystem_devtype(mon, "usb", "usb_device");
+    //udev_monitor_filter_add_match_subsystem_devtype(mon, "usb", "usb_device");
+    udev_monitor_filter_add_match_subsystem_devtype(mon, "block", "disk");
     udev_monitor_enable_receiving(mon);
     /* Get the file descriptor (fd) for the monitor.
        This fd will get passed to select() */
@@ -129,7 +190,7 @@ int main (void)
     udev_list_entry_foreach(dev_list_entry, devices)
     {
         const char *path;
-        char devnode[STR_LEN];
+        char devnode[LEN_STR];
 
         path = udev_list_entry_get_name(dev_list_entry);
         dev = udev_device_new_from_syspath(udev, path);
@@ -143,16 +204,16 @@ int main (void)
 
 //        }
 
-        dev_usb = udev_device_get_parent_with_subsystem_devtype(
+        devUsb = udev_device_get_parent_with_subsystem_devtype(
                dev,
-               "usb",
-               "usb_device");
-        if (dev_usb)
+               "block",
+               "disk");
+        if (devUsb)
         {
-            if ( strcmp(devnode, udev_device_get_devnode(dev_usb)) != 0 )
+            if ( strcmp(devnode, udev_device_get_devnode(devUsb)) != 0 )
             {
-              write_buff(dev_usb);
-              strcpy(devnode, udev_device_get_devnode(dev_usb));
+              write_log(devUsb);
+              strcpy(devnode, udev_device_get_devnode(devUsb));
             }
         }
 
@@ -184,18 +245,14 @@ int main (void)
             dev = udev_monitor_receive_device(mon);
             if (dev)
             {
-                write_buff(dev);
+                write_log(dev);
                 udev_device_unref(dev);
             }
-//            else {
-//                printf("No Device from receive_device(). An error occured.\n");
-//            }
         }
         usleep(250*1000);
-        printf(".");
+        DPRINT(".");
         fflush(stdout);
     }
-
 
     udev_unref(udev);
 

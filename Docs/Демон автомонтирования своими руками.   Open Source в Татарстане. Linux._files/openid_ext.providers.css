@@ -1,0 +1,8 @@
+#openid-ext-block-form .google { background-image:url(http://openkazan.info/modules/openid_ext/files/google.png); }
+#openid-ext-block-form .yandex { background-image:url(http://openkazan.info/modules/openid_ext/files/yandex.png); }
+#openid-ext-block-form .rambler { background-image:url(http://openkazan.info/modules/openid_ext/files/rambler.png); }
+#openid-ext-block-form .livejournal { background-image:url(http://openkazan.info/modules/openid_ext/files/livejournal.png); }
+#openid-ext-block-form .yahoo { background-image:url(http://openkazan.info/modules/openid_ext/files/yahoo.png); }
+#openid-ext-block-form .openid { background-image:url(http://openkazan.info/modules/openid_ext/files/openid.png); }
+#openid-ext-block-form #edit-input-wrapper { display:none; }
+#openid-ext-block-form #edit-op { display:none; }
