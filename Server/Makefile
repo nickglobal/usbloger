@@ -1,8 +1,9 @@
 CC=gcc
+APP_NAME=usbl_srv
 
 all:
-	$(CC) -o server server.c crc32.c
+	$(CC) -o $(APP_NAME) server.c crc32.c
 
 clean:
-	rm -f server
+	rm -f $(APP_NAME)
 	rm -f *.o

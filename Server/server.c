@@ -20,8 +20,10 @@
 #define IP_ADDRESS	"127.0.0.1"
 #define PORT		1230
 #define PAYLOAD_SIZE	1024
-#define LOG_FILE	"./report.txt"
-#define SERIAL_FILE	"./serial.txt"
+
+#define CONFIG_FILE		"./usbl_server"
+#define CONFIG_NUM_PARAMS	2
+#define LINE_LENGTH		128
 
 
 int main(int argc, char *argv[])
@@ -35,10 +37,23 @@ int main(int argc, char *argv[])
 	struct packet p;
 	char buf[PAYLOAD_SIZE];
 
+	char log_file[LINE_LENGTH];
+	char serial_file[LINE_LENGTH];
+
 	unsigned long crc32_value;
 	struct hostent *hostentry;
 	char *ipbuf; //need to delete
 	unsigned int i;
+
+	memset(log_file, 0, LINE_LENGTH);
+	memset(serial_file, 0, LINE_LENGTH);
+
+	ret = parse_config(CONFIG_FILE, log_file, serial_file, CONFIG_NUM_PARAMS);
+	if (ret)
+	{
+		printf("Something wrong happened while reading configuration. Please check config file - %s\n", CONFIG_FILE);
+		exit(1);
+	}
 
 	clear_packet(&p, buf);
 	/* Initialize the socket to recv messages */
@@ -88,7 +103,7 @@ int main(int argc, char *argv[])
 				putchar('\n');
 
 				crc32_value = crc32(buf, ret);
-				printf("CRC32 value of the message is = %x\n", crc32_value);
+				printf("CRC32 value of the message is = %lx\n", crc32_value);
 
 				ret = parse_packet(&p, buf, ret);
 				if(ret)
@@ -109,11 +124,11 @@ int main(int argc, char *argv[])
 				ipbuf = inet_ntoa(*((struct in_addr *)hostentry->h_addr_list[0]));
 				printf("Host IP: %s\n", ipbuf);
 
-				ret = is_serail_exist_in_list(p.serial);
+				ret = is_serial_allowed(serial_file, p.serial);
 				if (ret != 0)
 				{
 					//serial is not in the list, so saving log
-					write_packet_to_file(&p);
+					save_packet(log_file, &p);
 				}
 
 				// serial in the list, nothing to do
@@ -271,7 +286,7 @@ static int clear_packet(struct packet *p, char *buf)
 	return 0;
 }
 
-static int is_serail_exist_in_list(char *serial)
+static int is_serial_allowed(char *file_name, char *serial)
 {
 	FILE *fp;
 	char *line = NULL;
@@ -279,10 +294,10 @@ static int is_serail_exist_in_list(char *serial)
 	ssize_t read;
 	int ret;
 
-	fp = fopen(SERIAL_FILE, "r");
+	fp = fopen(file_name, "r");
 	if (fp == NULL)
 	{
-		printf("fopen filed on %s\n", SERIAL_FILE);
+		printf("fopen filed on %s\n", file_name);
 		return 1;
 	}
 
@@ -310,7 +325,7 @@ static int is_serail_exist_in_list(char *serial)
 }
 
 
-static int write_packet_to_file(struct packet *p)
+static int save_packet(char *file_name, struct packet *p)
 {
 	int fd;
 
@@ -320,9 +335,9 @@ static int write_packet_to_file(struct packet *p)
 		return 1;
 	}
 
-	fd = open(LOG_FILE, O_WRONLY | O_CREAT | O_APPEND);
+	fd = open(file_name, O_WRONLY | O_CREAT | O_APPEND);
 	if (fd == -1)
-		printf("File %s was not opened\n", LOG_FILE);
+		printf("File %s was not opened\n", file_name);
 
 	write(fd, p->time, p->time_len);
 	write(fd, "\t", 1);
@@ -336,7 +351,78 @@ static int write_packet_to_file(struct packet *p)
 	write(fd, "\t", 1);
 	write(fd, p->action, p->action_len);
 	write(fd, "\n", 1);
+
 	close(fd);
+
+	return 0;
+}
+
+static int parse_config(const char *config_file, char *log_file, char *serial_file, unsigned int num_params)
+{
+	FILE *fp;
+	char *variable;
+	char *value;
+	unsigned int red_params = 0;
+
+	char *buf = malloc(LINE_LENGTH);
+	if (buf == NULL)
+	{
+		printf("%s, calloc failed\n", __FUNCTION__);
+		exit(1);
+	}
+	memset(buf, 0, LINE_LENGTH);
+
+	fp = fopen(config_file, "r");
+	if (fp == NULL)
+	{
+		printf("Can't open file - %s\n", config_file);
+		exit(1);
+	}
+
+	while (NULL != fgets(buf, LINE_LENGTH, fp))
+	{
+		//count = 0;
+		// убираем символ перевода строки, если он есть
+		if ('\n' == buf[strlen(buf)-1])
+		{
+			buf[strlen(buf)-1] = '\0';
+		}
+		// пропускаем комментарии и строки, начинающиеся с '='
+		if (('#' == buf[0]) || ('=' == buf[0]))
+		{
+			continue;
+		}
+		// защищаемся от "неполных" строк и строк с первым знаком '=' на последней позиции
+		if ((2 < strlen(buf)) && ('=' != buf[strlen(buf)-1]))
+		{
+			if (NULL != strchr(buf, '='))
+			{
+				variable = strtok(buf, "=");
+				value = strtok(NULL, "=");
+				// ищем совпадение с известными программе параметрами
+				if (0 == strncmp("LOG_FILE", variable, 8))
+				{
+					strncpy(log_file, value, strlen(value));
+					red_params += 1;
+				}
+				else if (0 == strncmp("SERIAL_FILE", variable, 11))
+				{
+					strncpy(serial_file, value, strlen(value));
+					red_params += 1;
+				}
+//				else if (0 == strncmp("port", variable, 4))
+//				{
+//					params->listenPort = atoi(value);
+//				}
+			}
+		}
+	}
+
+	fclose(fp);
+	free(buf);
+
+	if(red_params != num_params)
+		return 1;
 
 	return 0;
 }
