@@ -6,10 +6,6 @@
 #include "ListDev.h"
 #include "ListDev.h"
 
-#define ALLOCATE_STR(dest, str) \
-        dest = malloc(strlen(str) + 1); \
-        strcpy(dest, str);
-
 #define SAFE_DEREFER_ASSIGN(pointer, field, value) \
         if (NULL != pointer) \
         { \
@@ -18,15 +14,13 @@
 
 DevList *ListEnd;
 
-void alloc_dev_str(DevList *list, DevUsb *dev)
+void allocate_dev(DevList *list, DevMsg *dev)
 {
-    ALLOCATE_STR(list->devnode, dev->devnode);
-    ALLOCATE_STR(list->serial, dev->serial);
-    ALLOCATE_STR(list->vendorId, dev->vendorId);
-    ALLOCATE_STR(list->productId, dev->productId);
+    list->dev = malloc(sizeof(DevMsg));
+    memcpy(list->dev, dev, sizeof(DevMsg));
 }
 
-void add_dev(DevUsb *dev)
+void add_dev(DevMsg *dev)
 {
     if( NULL == ListEnd)
     {//First list node
@@ -39,9 +33,9 @@ void add_dev(DevUsb *dev)
         {
             ListEnd->next = NULL;
             ListEnd->prev = NULL;
-            alloc_dev_str(ListEnd, dev);
+            allocate_dev(ListEnd, dev);
         }
-   }
+    }
     else
     {
         ListEnd->next = malloc(sizeof(DevList));
@@ -54,12 +48,12 @@ void add_dev(DevUsb *dev)
             ListEnd->next->next = NULL;
             ListEnd->next->prev = ListEnd;
             ListEnd = ListEnd->next;
-            alloc_dev_str(ListEnd, dev);
+            allocate_dev(ListEnd, dev);
         }
     }//else if( NULL == ListEnd)
 }
 
-void remove_dev(DevUsb *dev)
+void remove_dev(DevMsg *dev)
 {
     DevList *list;
 
@@ -73,14 +67,12 @@ void remove_dev(DevUsb *dev)
         {
             ListEnd = list->prev;
         }
-        free(list->serial);
-        free(list->vendorId);
-        free(list->productId);
+        free(list->dev);
         free(list);
     }
 }
 
-DevList* find_dev(DevUsb *dev)
+DevList* find_dev(DevMsg *dev)
 {
     DevList *list, *matchItem;
 
@@ -89,7 +81,7 @@ DevList* find_dev(DevUsb *dev)
 
     while(NULL != list)
     {//Iterate list from end to begin
-        if(0 != strcmp(dev->devnode,  list->devnode) )
+        if(0 != strcmp(dev->devnode,  list->dev->devnode) )
         {
             list = list->prev;
         }

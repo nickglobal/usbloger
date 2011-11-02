@@ -12,15 +12,29 @@
 #define LEN_BUF (1024)
 #define MRK_BEGIN (0xBE)
 #define MRK_END (0xED)
-#define FIELD_NUM (6)
 
-typedef  struct  DevUsb_s {
+enum {
+    TIME_REC,
+    HOST_REC,
+    SERIAL_REC,
+    ACTION_REC,
+    VENDOR_NAME_REC,
+    VENDOR_ID_REC,
+    PRODUCT_NAME,
+    PRODUCT_ID,
+    NUMB_REC
+};
+
+typedef struct MsgRecord_s {
+    char name[LEN_STR];
+    char value[LEN_STR];
+}MsgRecord;
+
+
+typedef struct DevMsg_s {
     char devnode[LEN_STR];
-    char serial[LEN_STR];
-    char vendorId[LEN_STR];
-    char productId[LEN_STR];
-    char action[LEN_STR];
-} DevUsb;
+    MsgRecord record[NUMB_REC];
+} DevMsg;
 
 
 

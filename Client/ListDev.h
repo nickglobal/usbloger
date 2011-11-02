@@ -14,15 +14,12 @@ typedef struct DevList_s
 {
     struct DevList_s *prev;
     struct DevList_s *next;
-    char *devnode;
-    char *serial;
-    char *vendorId;
-    char *productId;
+    DevMsg *dev;
 }DevList;
 
-void add_dev(DevUsb *dev);
-DevList* find_dev(DevUsb *dev);
-void remove_dev(DevUsb *dev);
+void add_dev(DevMsg *dev);
+DevList* find_dev(DevMsg *dev);
+void remove_dev(DevMsg *dev);
 
 
 #endif /* LISTDEV_H_ */

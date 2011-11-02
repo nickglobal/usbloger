@@ -8,7 +8,7 @@
 #ifndef SOCKETUDP_H_
 #define SOCKETUDP_H_
 
-#define IP_ADDRESS  "127.0.0.1"
+#define maksimka "HRK1-DHP-F01042"
 //#define IP_ADDRESS  "172.28.143.3"
 #define PORT        1230
 
