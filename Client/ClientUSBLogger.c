@@ -201,9 +201,8 @@ int main (int argc, char *argv[])
 
     if( 0 == strcmp("-h", argv[1]) )
     {
-        strncpy(HostName, /*argv[2]*/ maksimka, LEN_STR);
+        strncpy(HostName, argv[2], LEN_STR);
     }
-
 
     /* Create the udev object */
     udev = udev_new();
