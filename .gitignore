@@ -3,4 +3,5 @@
 *.o
 *.mk
 *.txt
+demo/*
 -I
