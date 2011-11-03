@@ -22,7 +22,7 @@
 #define PORT		1230
 #define PAYLOAD_SIZE	1024
 
-#define CONFIG_FILE		"/home/USBlogger/server_test_daemon/usbl_server"
+#define CONFIG_FILE		"/etc/init.d/usbl_server"
 #define CONFIG_NUM_PARAMS	2
 #define LINE_LENGTH		128
 #define PIDFILE			"/var/run/usbl_srv.pid"
