@@ -1,6 +1,7 @@
 #!/bin/sh
 
 install:
+	sudo chmod 777 /var/www
 	sudo cp config.php /var/www/
 	sudo cp index.php /var/www/
 	sudo cp log.php /var/www/
