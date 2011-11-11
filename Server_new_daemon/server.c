@@ -20,12 +20,13 @@
 
 #define IP_ADDRESS	"127.0.0.1"
 #define PORT		1230
+#define PORT_ACK	1231
 #define PAYLOAD_SIZE	1024
 
 #define CONFIG_FILE		"/etc/init.d/usbl_server"
 #define CONFIG_NUM_PARAMS	2
 #define LINE_LENGTH		128
-#define PIDFILE			"/var/run/usbl_srv.pid"
+#define PID_FILE			"/var/run/usbl_srv.pid"
 
 int main(int argc, char *argv[])
 {
@@ -42,7 +43,7 @@ int main(int argc, char *argv[])
 	char log_file[LINE_LENGTH];
 	char serial_file[LINE_LENGTH];
 
-	unsigned long crc32_value;
+	unsigned int crc32_value;
 	struct hostent *hostentry;
 	unsigned int i;
 	int mask;
@@ -75,7 +76,7 @@ int main(int argc, char *argv[])
 	   we can exit the parent process. */
 	if (pid > 0)
 	{
-		save_pid(PIDFILE, pid);
+		save_pid(PID_FILE, pid);
 		exit(0);
 	}
 
@@ -182,7 +183,7 @@ int main(int argc, char *argv[])
 				// serial in the list, nothing to do
 
 				crc32_value = crc32(buf, len);
-				syslog(LOG_DEBUG, "CRC32 value of the message is = %lx", crc32_value);
+				syslog(LOG_DEBUG, "CRC32 value of the message is = %x", crc32_value);
 
 				hostentry = gethostbyname(p.fields[1].value_val);
 				if(hostentry == NULL)
@@ -197,9 +198,7 @@ int main(int argc, char *argv[])
 				clear_packet(&p);
 				memset(buf, 0, PAYLOAD_SIZE);
 
-				sprintf(buf, "%lx", crc32_value);
-				ret = send_buffer_to_client(sk, (struct in_addr *)hostentry->h_addr_list[0], buf, strlen(buf));
-				memset(buf, 0, PAYLOAD_SIZE);
+				ret = send_buffer_to_client(sk, (struct in_addr *)hostentry->h_addr_list[0], (char *)&crc32_value, sizeof(crc32_value));
 
 /*
 				// Any device plugged into server
@@ -385,6 +384,7 @@ static int save_packet(char *file_name, struct packet *pkt)
 {
 	int fd;
 	unsigned int i;
+	mode_t old_mask;
 
 	if(pkt == NULL)
 	{
@@ -392,7 +392,7 @@ static int save_packet(char *file_name, struct packet *pkt)
 		return 1;
 	}
 
-	umask(~(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH));
+	old_mask = umask(~(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH));
 
 	fd = open(file_name, O_WRONLY | O_APPEND);
 	if (fd == -1)
@@ -422,6 +422,8 @@ static int save_packet(char *file_name, struct packet *pkt)
 	write(fd, "\n", 1);
 
 	close(fd);
+
+	umask(old_mask);
 
 	return 0;
 }
@@ -502,7 +504,7 @@ static int save_pid(char *file_name, pid_t pid)
 	int fd;
 	char buf[8];
 
-	fd = open(file_name, O_WRONLY | O_CREAT);
+	fd = open(file_name, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	if (fd == -1)
 	{
 		syslog(LOG_ERR, "File %s was not opened", file_name);
@@ -525,16 +527,16 @@ static int send_buffer_to_client(int sock_fd, struct in_addr *client_addr, char 
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(PORT);
+	addr.sin_port = htons(PORT_ACK);
 	addr.sin_addr.s_addr = client_addr->s_addr;
 
 	ret = sendto(sock_fd, buf, len, 0, (struct sockaddr *)&addr, sizeof(addr));
 	if (ret == -1)
 		syslog(LOG_ERR, "sendto() error");
 	else if (ret != len)
-		syslog(LOG_ERR, "Sending a UDP message not complete!\n");
+		syslog(LOG_ERR, "Sending a UDP message not complete!");
 	else
-		syslog(LOG_DEBUG, "Sent a UDP message - %s, to %s\n", buf, inet_ntoa(*client_addr));
+		syslog(LOG_DEBUG, "Sent a UDP message - %s, to %s", buf, inet_ntoa(*client_addr));
 
 	return ret;
 }
