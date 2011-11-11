@@ -6,7 +6,7 @@ PROJECT=cul
 PROJECTDIR = .
 
 CFLAGS =
-CFLAGS += -I /usr/include
+CFLAGS += -c
 CFLAGS += -Wall 
 CFLAGS += -g
 
@@ -15,13 +15,27 @@ LDLAGS += -Wall
 LDLAGS += -g
 LDFLAGS += -ludev
 
-compile: ClientUSBLogger.c SocketUDP.c
-	gcc -c -g -Wall ClientUSBLogger.c SocketUDP.c
+compile_no_daemon: daemon.c ClientUSBLogger.c SocketUDP.c crc32.c
+	gcc $(CFLAGS) -DWITHOUT_DAEMON daemon.c ClientUSBLogger.c SocketUDP.c
+
+compile: daemon.c ClientUSBLogger.c SocketUDP.c crc32.c
+	gcc $(CFLAGS) daemon.c ClientUSBLogger.c SocketUDP.c
 	
-link: ClientUSBLogger.o SocketUDP.o
-	gcc -Wall -ludev ClientUSBLogger.o SocketUDP.o -o $(PROJECT)
+link: daemon.o ClientUSBLogger.o SocketUDP.o crc32.o
+	gcc $(LDFLAGS) daemon.o ClientUSBLogger.o SocketUDP.o crc32.o -o $(PROJECT)
+
+compile_no_daemon: daemon.c ClientUSBLogger.c SocketUDP.c crc32.c
+	gcc $(CFLAGS) daemon.c ClientUSBLogger.c SocketUDP.c
 	
 build: clean all
+
+build_no_daemon: clean all_no_daemon
+
+all_no_daemon: compile_no_daemon link
+	@echo "\n"
+	@echo "----------------------------------------"
+	@echo "--- Compiled Successfully No Daemon  ---"
+	@echo "----------------------------------------"
 
 all: compile link
 	@echo "\n"
