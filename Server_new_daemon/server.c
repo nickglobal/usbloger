@@ -26,7 +26,7 @@
 #define CONFIG_FILE		"/etc/init.d/usbl_server"
 #define CONFIG_NUM_PARAMS	2
 #define LINE_LENGTH		128
-#define PID_FILE			"/var/run/usbl_srv.pid"
+#define PID_FILE		"/var/run/usbl_srv.pid"
 
 int main(int argc, char *argv[])
 {
