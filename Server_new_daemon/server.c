@@ -392,18 +392,20 @@ static int save_packet(char *file_name, struct packet *pkt)
 		return 1;
 	}
 
-	old_mask = umask(~(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH));
-
 	fd = open(file_name, O_WRONLY | O_APPEND);
 	if (fd == -1)
 	{
 		syslog(LOG_ERR, "File %s was not opened, trying to create it", file_name);
+
+		old_mask = umask(~(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH));
 		fd = open(file_name, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 		if (fd == -1)
 		{
 			syslog(LOG_ERR, "File %s could not be created, exiting", file_name);
 			exit(1);
 		}
+		umask(old_mask);
+
 		for(i = 0; i < pkt->num_fields - 1; i++)
 		{
 			write(fd, pkt->fields[i].field_val, pkt->fields[i].field_len);
@@ -422,8 +424,6 @@ static int save_packet(char *file_name, struct packet *pkt)
 	write(fd, "\n", 1);
 
 	close(fd);
-
-	umask(old_mask);
 
 	return 0;
 }
