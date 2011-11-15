@@ -8,7 +8,6 @@
 #ifndef CLIENTUSBLOGGER_H_
 #define CLIENTUSBLOGGER_H_
 
-#define LEN_IP (16)
 #define LEN_STR (255)
 #define LEN_BUF (1024)
 #define MRK_BEGIN (0xBE)
@@ -24,6 +23,8 @@ enum {
     VENDOR_ID_REC,
     PRODUCT_NAME,
     PRODUCT_ID,
+    UPTIME_SYS,
+    UPTIME_CLIENT,
     NUMB_REC
 };
 

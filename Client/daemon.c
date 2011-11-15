@@ -19,17 +19,14 @@
 #include "SocketUDP.h"
 #include "common.h"
 
-#define PIDFILE         "/var/run/cul.pid"
+//#define PIDFILE         "/var/run/.cul.pid"
 //#define PATH2DEMO "/root/cul/.culdemo"
-//#define WITHOUT_DAEMON
-
-
-static int save_pid(char *file_name, pid_t pid);
+//static int save_pid(char *file_name, pid_t pid);
 
 int main (int argc, char *argv[])
 {
     char hostName[LEN_STR];
-    char hostIP[LEN_IP];
+    char hostIP[LEN_STR];
     int status = EXIT_FAILURE;
     /* Our process ID and Session ID */
     pid_t pid, sid;
@@ -85,7 +82,7 @@ int main (int argc, char *argv[])
          we can exit the parent process. */
     if (pid > 0)
     {
-        save_pid(PIDFILE, pid);
+        //save_pid(PIDFILE, pid);
         exit(EXIT_SUCCESS);
     }
 
@@ -128,24 +125,24 @@ int main (int argc, char *argv[])
     exit(EXIT_SUCCESS);
 }
 
-static int save_pid(char *file_name, pid_t pid)
-{
-    int fd;
-    char buf[8];
-
-    fd = open(file_name, O_WRONLY | O_CREAT);
-    if (fd == -1)
-    {
-        syslog(LOG_ERR | LOG_USER, "File %s was not opened\n", file_name);
-        exit(1);
-    }
-
-    sprintf(buf, "%d\n", pid);
-
-    write(fd, buf, strlen(buf));
-
-    close(fd);
-
-    return 0;
-}
+//static int save_pid(char *file_name, pid_t pid)
+//{
+//    int fd;
+//    char buf[8];
+//
+//    fd = open(file_name, O_WRONLY | O_CREAT);
+//    if (fd == -1)
+//    {
+//        syslog(LOG_ERR | LOG_USER, "File %s was not opened\n", file_name);
+//        exit(1);
+//    }
+//
+//    sprintf(buf, "%d\n", pid);
+//
+//    write(fd, buf, strlen(buf));
+//
+//    close(fd);
+//
+//    return 0;
+//}
 

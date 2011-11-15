@@ -122,7 +122,7 @@ int get_ip_by_hostname(const char *pHostname, char *pIp)
             pHost->h_addr,
             pHost->h_length);
 
-    strncpy(pIp, inet_ntoa(sin_addr), LEN_IP);
+    strncpy(pIp, inet_ntoa(sin_addr), LEN_STR);
     status = EXIT_SUCCESS;
     }
 
